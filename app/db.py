@@ -7,17 +7,17 @@ from typing import Iterator, Optional
 import psycopg2
 from psycopg2.extensions import connection as PgConnection
 from psycopg2.extras import RealDictCursor
-from psycopg2.pool import SimpleConnectionPool
+from psycopg2.pool import ThreadedConnectionPool
 
 from .config import settings
 
-_pool: Optional[SimpleConnectionPool] = None
+_pool: Optional[ThreadedConnectionPool] = None
 
 
-def init_pool() -> SimpleConnectionPool:
+def init_pool() -> ThreadedConnectionPool:
     global _pool
     if _pool is None:
-        _pool = SimpleConnectionPool(
+        _pool = ThreadedConnectionPool(
             minconn=settings.db_pool_min,
             maxconn=settings.db_pool_max,
             dsn=settings.database_url,
@@ -33,7 +33,7 @@ def close_pool() -> None:
 
 
 @contextmanager
-def get_conn() -> Iterator[PgConnection]:
+def get_conn() -> Iterator[PgConnection]:  # type: ignore[return]
     """Check out a connection. Commits on success, rolls back on error."""
     pool = init_pool()
     conn = pool.getconn()

@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VCbrain — Eastcoast Fund</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#08080e;--bg2:#0f0f18;--bg3:#16161f;--bg4:#1c1c27;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);
+  --text:#ede9f8;--muted:#5e5a72;--muted2:#8b86a0;
+  --purple:#8b7ff0;--purple2:#b3aaff;
+  --green:#2dd4a0;--amber:#f59e0b;--red:#f87171;
+  --mono:'DM Mono',monospace;--serif:'Fraunces',serif;--sans:'DM Sans',sans-serif;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;display:flex}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh}
+.logo{padding:20px 18px 16px;border-bottom:1px solid var(--border)}
+.logo-name{font-family:var(--serif);font-size:19px;color:var(--text);font-weight:300;letter-spacing:-.3px}
+.logo-name em{color:var(--purple2);font-style:italic}
+.logo-fund{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em;margin-top:3px;text-transform:uppercase}
+.nav{padding:10px 8px;flex:1;overflow-y:auto}
+.nav-section{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em;padding:12px 10px 5px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted2);transition:all .12s;margin-bottom:1px;border:none;background:none;width:100%;text-align:left;position:relative}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,0.04)}
+.nav-item.active{color:var(--text);background:rgba(139,127,240,0.13)}
+.nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:2px;height:14px;background:var(--purple);border-radius:0 2px 2px 0}
+.nav-icon{width:16px;text-align:center;flex-shrink:0}
+.nav-badge{margin-left:auto;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:8px}
+.nb-amber{background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.2)}
+.nb-green{background:rgba(45,212,160,.1);color:var(--green);border:1px solid rgba(45,212,160,.2)}
+.nb-purple{background:rgba(139,127,240,.12);color:var(--purple2);border:1px solid rgba(139,127,240,.2)}
+.sidebar-footer{padding:12px 14px;border-top:1px solid var(--border)}
+.pulse-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.pulse{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 2.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.iter-pill{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--purple2);background:rgba(139,127,240,.1);padding:1px 7px;border-radius:8px;border:1px solid rgba(139,127,240,.2)}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;height:100vh}
+.topbar{padding:0 24px;height:50px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0}
+.topbar-title{font-family:var(--serif);font-size:16px;font-weight:300}
+.topbar-sep{color:var(--muted);font-size:12px}
+.topbar-sub{font-size:12px;color:var(--muted)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.topbar-stat{font-family:var(--mono);font-size:11px;color:var(--muted2);background:var(--bg3);padding:3px 10px;border-radius:6px;border:1px solid var(--border)}
+.content{flex:1;overflow-y:auto;padding:22px 24px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.stat-val{font-family:var(--mono);font-size:24px;letter-spacing:-1px;margin-bottom:3px}
+.stat-label{font-size:11px;color:var(--muted)}
+.sv-purple{color:var(--purple2)}.sv-green{color:var(--green)}.sv-amber{color:var(--amber)}.sv-text{color:var(--text)}
+.section-title{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.card-pad{padding:16px 18px}
+.graph-canvas{width:100%;height:220px;display:block}
+.graph-legend{display:flex;gap:16px;padding:10px 18px;border-top:1px solid var(--border)}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.conflict-item{padding:16px 18px;border-bottom:1px solid var(--border);transition:background .12s}
+.conflict-item:last-child{border-bottom:none}
+.conflict-item:hover{background:rgba(255,255,255,.015)}
+.conflict-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.conflict-entity{font-size:13px;font-weight:500}
+.conflict-attr{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--bg3);padding:2px 7px;border-radius:4px}
+.conflict-delta{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--amber)}
+.vs-row{display:grid;grid-template-columns:1fr 28px 1fr;gap:8px;align-items:center;margin-bottom:10px}
+.vs-box{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px}
+.vs-val{font-family:var(--mono);font-size:13px;margin-bottom:2px}
+.vs-src{font-size:11px;color:var(--muted)}
+.vs-sep{text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.action-row{display:flex;gap:6px;flex-wrap:wrap}
+.btn{padding:5px 12px;border-radius:7px;font-size:12px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--muted2);transition:all .12s;font-family:var(--sans)}
+.btn:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
+.btn-a{background:rgba(139,127,240,.12);border-color:rgba(139,127,240,.25);color:var(--purple2)}
+.btn-b{background:rgba(45,212,160,.08);border-color:rgba(45,212,160,.2);color:var(--green)}
+.resolved-tag{font-family:var(--mono);font-size:10px;color:var(--green);background:rgba(45,212,160,.1);padding:2px 8px;border-radius:8px;border:1px solid rgba(45,212,160,.2)}
+.search-wrap{position:relative;margin-bottom:18px}
+.search-input{width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:11px 16px 11px 38px;font-size:13px;color:var(--text);font-family:var(--sans);outline:none;transition:border-color .15s}
+.search-input:focus{border-color:var(--purple)}
+.search-input::placeholder{color:var(--muted)}
+.search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
+.brief-header{padding:16px 18px;border-bottom:1px solid var(--border)}
+.brief-name{font-family:var(--serif);font-size:20px;font-weight:300;margin-bottom:6px}
+.pill-row{display:flex;gap:5px;flex-wrap:wrap}
+.pill{font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:8px;border:1px solid}
+.pill-purple{color:var(--purple2);border-color:rgba(139,127,240,.3);background:rgba(139,127,240,.08)}
+.pill-green{color:var(--green);border-color:rgba(45,212,160,.3);background:rgba(45,212,160,.08)}
+.pill-amber{color:var(--amber);border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08)}
+.brief-ai{padding:13px 18px;border-bottom:1px solid var(--border);background:rgba(139,127,240,.04)}
+.brief-ai-label{font-family:var(--mono);font-size:9px;color:var(--purple2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
+.brief-ai-text{font-size:13px;line-height:1.6;color:var(--text)}
+.facts-table{width:100%;border-collapse:collapse}
+.facts-table th{font-family:var(--mono);font-size:9px;color:var(--muted);text-align:left;padding:8px 18px;border-bottom:1px solid var(--border);letter-spacing:.06em;text-transform:uppercase}
+.facts-table td{padding:9px 18px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
+.facts-table tr:last-child td{border-bottom:none}
+.facts-table tr:hover td{background:rgba(255,255,255,.01)}
+.fact-attr{font-family:var(--mono);color:var(--muted);font-size:11px}
+.fact-conflict{color:var(--amber)}
+.conf-bar{width:48px;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.conf-fill{height:100%;border-radius:2px}
+.cf-high{background:var(--green)}.cf-mid{background:var(--amber)}.cf-low{background:var(--red)}
+.src-pill{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid}
+.sp-crm{color:var(--green);border-color:rgba(45,212,160,.25)}
+.sp-pdf{color:var(--amber);border-color:rgba(245,158,11,.25)}
+.sp-email{color:var(--purple2);border-color:rgba(139,127,240,.25)}
+.sp-hr{color:var(--red);border-color:rgba(248,113,113,.25)}
+.harness-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.iter-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.iter-row:last-child{border-bottom:none}
+.iter-label{font-family:var(--mono);font-size:11px;color:var(--muted);width:50px;flex-shrink:0}
+.iter-bar{flex:1;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.iter-fill{height:100%;border-radius:2px;background:var(--purple)}
+.iter-score{font-family:var(--mono);font-size:11px;color:var(--text);width:32px;text-align:right;flex-shrink:0}
+.iter-note{font-size:11px;color:var(--muted);padding-left:10px;flex:1}
+.best-tag{font-family:var(--mono);font-size:9px;color:var(--green);background:rgba(45,212,160,.1);padding:1px 5px;border-radius:4px;border:1px solid rgba(45,212,160,.2);white-space:nowrap}
+.improvement-card{background:rgba(139,127,240,.08);border:1px solid rgba(139,127,240,.2);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px}
+.improvement-val{font-family:var(--mono);font-size:30px;color:var(--purple2);letter-spacing:-1px}
+.improvement-label{font-size:11px;color:var(--muted);margin-top:4px}
+.learn-item{padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted2);display:flex;gap:8px;line-height:1.5}
+.learn-item:last-child{border-bottom:none}
+.learn-dot{width:4px;height:4px;border-radius:50%;background:var(--purple);margin-top:5px;flex-shrink:0}
+.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 50px)}
+.chat-suggestions{display:flex;gap:6px;flex-wrap:wrap;padding:10px 24px;border-bottom:1px solid var(--border)}
+.suggestion{font-size:11px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--muted2);transition:all .12s}
+.suggestion:hover{color:var(--text);border-color:var(--border2)}
+.chat-messages{flex:1;overflow-y:auto;padding:18px 24px;display:flex;flex-direction:column;gap:14px}
+.msg{display:flex;gap:9px;max-width:620px}
+.msg.user{align-self:flex-end;flex-direction:row-reverse}
+.msg-avatar{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;font-family:var(--mono)}
+.av-ai{background:rgba(139,127,240,.18);color:var(--purple2);border:1px solid rgba(139,127,240,.25)}
+.av-user{background:rgba(45,212,160,.12);color:var(--green);border:1px solid rgba(45,212,160,.2)}
+.msg-bubble{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:11px 14px;font-size:13px;line-height:1.6}
+.msg.user .msg-bubble{background:rgba(139,127,240,.1);border-color:rgba(139,127,240,.2)}
+.msg-bubble strong{color:var(--purple2);font-weight:500}
+.fact-tag{display:inline-block;font-family:var(--mono);font-size:10px;background:var(--bg3);border:1px solid var(--border2);padding:1px 6px;border-radius:4px;color:var(--muted2);margin:0 2px}
+.typing{display:flex;gap:4px;align-items:center;padding:3px 0}
+.typing span{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.chat-footer{padding:12px 24px;border-top:1px solid var(--border);display:flex;gap:8px}
+.chat-input{flex:1;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--text);font-family:var(--sans);outline:none;resize:none;height:42px;max-height:120px;overflow-y:auto;transition:border-color .15s;line-height:1.5}
+.chat-input:focus{border-color:var(--purple)}
+.chat-input::placeholder{color:var(--muted)}
+.chat-send{padding:10px 18px;background:var(--purple);border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:13px;font-family:var(--sans);transition:opacity .12s;flex-shrink:0}
+.chat-send:hover{opacity:.85}
+.empty{text-align:center;padding:48px 24px;color:var(--muted)}
+.empty-icon{font-size:28px;margin-bottom:12px;opacity:.4}
+.empty-text{font-size:13px;line-height:1.65;color:var(--muted2)}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-name">VC<em>brain</em></div>
+    <div class="logo-fund">Eastcoast Fund · 2026</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-section">Fund intelligence</div>
+    <button class="nav-item active" onclick="showView('brain')">
+      <span class="nav-icon">◈</span> Brain overview
+      <span class="nav-badge nb-green">live</span>
+    </button>
+    <button class="nav-item" onclick="showView('conflicts')">
+      <span class="nav-icon">⚡</span> Conflict queue
+      <span class="nav-badge nb-amber" id="conflict-count">85</span>
+    </button>
+    <button class="nav-item" onclick="showView('search')">
+      <span class="nav-icon">◎</span> Company brief
+    </button>
+    <button class="nav-item" onclick="showView('harness')">
+      <span class="nav-icon">↑</span> Harness evolution
+      <span class="nav-badge nb-purple">iter 7</span>
+    </button>
+    <div class="nav-section" style="margin-top:6px">Assistant</div>
+    <button class="nav-item" onclick="showView('chat')">
+      <span class="nav-icon">✦</span> Ask VCbrain
+    </button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="pulse-row">
+      <div class="pulse"></div>
+      <span>Memory active</span>
+      <span class="iter-pill">+51% ↑</span>
+    </div>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <span class="topbar-title" id="view-title">Brain overview</span>
+    <span class="topbar-sep">·</span>
+    <span class="topbar-sub" id="view-sub">Fund intelligence at a glance</span>
+    <div class="topbar-right">
+      <span class="topbar-stat" id="topbar-entity-count">— entities</span>
+      <span class="topbar-stat" id="topbar-ts">just now</span>
+    </div>
+  </div>
+
+  <!-- BRAIN -->
+  <div id="view-brain" class="content">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-val sv-purple" id="stat-entities">—</div><div class="stat-label">Companies tracked</div></div>
+      <div class="stat-card"><div class="stat-val sv-green" id="stat-facts">—</div><div class="stat-label">Facts in memory</div></div>
+      <div class="stat-card"><div class="stat-val sv-amber" id="stat-conflicts">—</div><div class="stat-label">Conflicts open</div></div>
+      <div class="stat-card"><div class="stat-val sv-text">0.41</div><div class="stat-label">Harness score · iter 0</div></div>
+    </div>
+    <div class="section-title">Knowledge graph — live · drag · scroll to zoom · click to brief</div>
+    <div class="card" style="margin-bottom:16px;position:relative">
+      <div id="graph-container" style="width:100%;height:420px;overflow:hidden;border-radius:12px 12px 0 0;cursor:grab"></div>
+      <div class="graph-legend" id="graph-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#2dd4a0"></div>Healthcare</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8b7ff0"></div>Technology</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Finance</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div>Retail</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div>Other</div>
+        <div class="legend-item" style="margin-left:auto"><div class="legend-dot" style="background:var(--amber);box-shadow:0 0 4px var(--amber)"></div>Has conflict</div>
+      </div>
+    </div>
+    <div id="graph-tooltip" style="position:fixed;display:none;background:#1c1c27;border:1px solid rgba(255,255,255,0.11);border-radius:8px;padding:10px 13px;font-size:12px;pointer-events:none;z-index:999;max-width:220px;line-height:1.5"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <div class="section-title">Recent ingestion</div>
+        <div class="card">
+          <div style="padding:4px 0">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;font-size:12px"><span style="font-family:var(--mono);font-size:9px;color:var(--amber);background:rgba(245,158,11,.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,.2)">PDF</span><span style="color:var(--muted2)">pitch_climateledger_ug.pdf</span><span style="margin-left:auto;font-size:11px;color:var(--muted)">2 min ago</span></div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;font-size:12px"><span style="font-family:var(--mono);font-size:9px;color:var(--purple2);background:rgba(139,127,240,.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(139,127,240,.2)">EMAIL</span><span style="color:var(--muted2)">Solarix Q1 update thread</span><span style="margin-left:auto;font-size:11px;color:var(--muted)">18 min ago</span></div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;font-size:12px"><span style="font-family:var(--mono);font-size:9px;color:var(--green);background:rgba(45,212,160,.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(45,212,160,.2)">CRM</span><span style="color:var(--muted2)">HubSpot sync — 12 records</span><span style="margin-left:auto;font-size:11px;color:var(--muted)">1 hr ago</span></div>
+            <div style="padding:10px 16px;display:flex;gap:10px;align-items:center;font-size:12px"><span style="font-family:var(--mono);font-size:9px;color:var(--amber);background:rgba(245,158,11,.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,.2)">PDF</span><span style="color:var(--muted2)">pitch_solarix_energy_gmbh.pdf</span><span style="margin-left:auto;font-size:11px;color:var(--muted)">3 hrs ago</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-title">Entity breakdown</div>
+        <div class="card card-pad">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px"><span style="color:var(--muted2);width:90px">Companies</span><div style="flex:1;height:3px;background:var(--bg4);border-radius:2px"><div style="width:32%;height:100%;background:var(--green);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--text);width:40px;text-align:right">400</span></div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px"><span style="color:var(--muted2);width:90px">People</span><div style="flex:1;height:3px;background:var(--bg4);border-radius:2px"><div style="width:100%;height:100%;background:var(--purple);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--text);width:40px;text-align:right">1,260</span></div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px"><span style="color:var(--muted2);width:90px">Emails</span><div style="flex:1;height:3px;background:var(--bg4);border-radius:2px"><div style="width:94%;height:100%;background:var(--purple2);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--text);width:40px;text-align:right">11,928</span></div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px"><span style="color:var(--muted2);width:90px">Investors</span><div style="flex:1;height:3px;background:var(--bg4);border-radius:2px"><div style="width:32%;height:100%;background:var(--amber);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--text);width:40px;text-align:right">400</span></div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px"><span style="color:var(--muted2);width:90px">Signals</span><div style="flex:1;height:3px;background:var(--bg4);border-radius:2px"><div style="width:100%;height:100%;background:var(--muted);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--text);width:40px;text-align:right">13,510</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFLICTS -->
+  <div id="view-conflicts" class="content" style="display:none">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:13px;color:var(--muted2)">85 need review · 15 auto-resolved today</span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn" style="color:var(--text);border-color:var(--border2)" id="f-all" onclick="filterConflicts('all')">All</button>
+        <button class="btn" id="f-rev" onclick="filterConflicts('revenue_figure')">ARR</button>
+        <button class="btn" id="f-con" onclick="filterConflicts('contact_person')">Contact</button>
+        <button class="btn" id="f-date" onclick="filterConflicts('founding_date')">Founded</button>
+      </div>
+    </div>
+    <div class="card" id="conflicts-container"></div>
+  </div>
+
+  <!-- SEARCH -->
+  <div id="view-search" class="content" style="display:none">
+    <div class="search-wrap">
+      <span class="search-icon">◎</span>
+      <input class="search-input" type="text" id="company-search" placeholder="Search any company — e.g. Solarix, LogiChain, ClimateLedger, MediFlow…" oninput="searchCompany(this.value)">
+    </div>
+    <div id="brief-container"><div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Search a company to see everything VCbrain knows.<br>Every fact is traceable to its source.</div></div></div>
+  </div>
+
+  <!-- HARNESS -->
+  <div id="view-harness" class="content" style="display:none">
+    <div class="harness-grid">
+      <div>
+        <div class="section-title">Evolution history</div>
+        <div class="card card-pad" id="harness-iters"></div>
+      </div>
+      <div>
+        <div class="section-title">Total improvement</div>
+        <div class="improvement-card"><div class="improvement-val">+51%</div><div class="improvement-label">score increase since iter_0</div></div>
+        <div class="section-title">What the agent learned</div>
+        <div class="card card-pad">
+          <div class="learn-item"><div class="learn-dot"></div>Low-confidence facts require explicit hedging in briefs</div>
+          <div class="learn-item"><div class="learn-dot"></div>Conflicting ARR sources must be flagged, not averaged</div>
+          <div class="learn-item"><div class="learn-dot"></div>Founder questions land better as hypotheses</div>
+          <div class="learn-item"><div class="learn-dot"></div>Email sentiment outperforms CRM stage label as signal</div>
+          <div class="learn-item"><div class="learn-dot"></div>East German state context improves sector classification</div>
+        </div>
+      </div>
+    </div>
+    <div class="section-title">Output comparison — iter_0 vs iter_7</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card card-pad">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--red);letter-spacing:.08em;margin-bottom:8px;text-transform:uppercase">iter_0 · score 0.41</div>
+        <div style="font-size:12px;line-height:1.65;color:var(--muted2)">Solarix Energy is a solar company in Leipzig with €480K ARR and 12 employees. CEO is Tobias Brenner. They are raising €800K.</div>
+      </div>
+      <div class="card card-pad" style="border-color:rgba(139,127,240,.25)">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.08em;margin-bottom:8px;text-transform:uppercase">iter_7 · score 0.84 · best</div>
+        <div style="font-size:12px;line-height:1.65;color:var(--text)"><span style="color:var(--amber)">ARR conflict flagged:</span> CRM €480K vs pitch deck €520K (8.3% delta) — verify before IC. Technical founders ex-Siemens + TU Dresden. 62 installations, 94% CSAT. East German SME thesis: strong fit. Advance to DD, resolve ARR first.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div id="view-chat" style="display:none;flex-direction:column;height:calc(100vh - 50px)">
+    <div class="chat-suggestions" id="sugg-bar">
+      <span class="suggestion" onclick="sendSugg(this.textContent)">What do you know about Hogan PLC?</span>
+      <span class="suggestion" onclick="sendSugg(this.textContent)">What conflicts need attention today?</span>
+      <span class="suggestion" onclick="sendSugg(this.textContent)">Tell me about Shah, Smith and Gilmore</span>
+      <span class="suggestion" onclick="sendSugg(this.textContent)">Brief me on Johnson-Roberts</span>
+      <span class="suggestion" onclick="sendSugg(this.textContent)">How has the harness improved?</span>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="msg"><div class="msg-avatar av-ai">VC</div><div class="msg-bubble">Good morning. I'm VCbrain — Eastcoast Fund's memory. I know facts across <strong>400 companies</strong> loaded from your PostgreSQL database.<br><br>I'm checking for open conflicts now — ask me about any company by name, or open the Conflict queue to start reviewing.<br><br>Ask me anything about your deal flow.</div></div>
+    </div>
+    <div class="chat-footer">
+      <textarea class="chat-input" id="chat-input" placeholder="Ask about any company, conflict, or deal…" rows="1" onkeydown="handleKey(event)" oninput="resize(this)"></textarea>
+      <button class="chat-send" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+// API origin: served from the same host as the page, so no port hardcode needed.
+const API = window.location.origin;
+
+const VIEWS = {
+  brain:     {title:'Brain overview',    sub:'Fund intelligence at a glance'},
+  conflicts: {title:'Conflict queue',    sub:'Loading…'},
+  search:    {title:'Company brief',     sub:'Search any company by name'},
+  harness:   {title:'Harness evolution', sub:'How VCbrain gets smarter over time'},
+  chat:      {title:'Ask VCbrain',       sub:'Plain language fund intelligence'},
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let resolved      = new Set();
+let currentFilter = 'all';
+let cachedConflicts = [];   // populated once from API
+let _searchTimer;
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function apiFetch(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), {status: r.status});
+  return r.json();
+}
+
+// ── Value formatting ──────────────────────────────────────────────────────────
+function fmtAttr(attr) {
+  return attr.replace(/_/g,' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace('Arr ','ARR ').replace('Mrr ','MRR ').replace(' Eur',' EUR');
+}
+
+function fmtVal(attr, val) {
+  if (/arr|mrr|revenue|amount/i.test(attr)) {
+    const n = parseFloat(val);
+    if (!isNaN(n)) {
+      if (n >= 1e6) return '€' + (n / 1e6).toFixed(1) + 'M';
+      if (n >= 1e3) return '€' + Math.round(n / 1e3) + 'K';
+      return '€' + Math.round(n);
+    }
+  }
+  return val;
+}
+
+function calcDelta(va, vb) {
+  const a = parseFloat(va), b = parseFloat(vb);
+  if (isNaN(a) || isNaN(b) || b === 0) return null;
+  return (Math.abs(a - b) / Math.max(a, b) * 100).toFixed(1) + '%';
+}
+
+function conflictType(attr) {
+  if (/arr|mrr|revenue|amount/i.test(attr))   return 'revenue_figure';
+  if (/contact|poc/i.test(attr))              return 'contact_person';
+  if (/founded|founding|date/i.test(attr))    return 'founding_date';
+  return 'other';
+}
+
+function srcLabel(type) {
+  return {crm:'CRM', email:'Email', pdf:'PDF', hr_record:'HR'}[type] || (type || '—');
+}
+
+function srcClass(type) {
+  return {crm:'sp-crm', email:'sp-email', pdf:'sp-pdf', hr_record:'sp-hr'}[type] || 'sp-crm';
+}
+
+// ── XSS safety ────────────────────────────────────────────────────────────────
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function showView(name) {
+  Object.keys(VIEWS).forEach(k => {
+    const el = document.getElementById('view-' + k);
+    if (el) el.style.display = 'none';
+  });
+  const el = document.getElementById('view-' + name);
+  if (el) el.style.display = name === 'chat' ? 'flex' : 'block';
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => {
+    if (b.getAttribute('onclick')?.includes("'" + name + "'")) b.classList.add('active');
+  });
+  document.getElementById('view-title').textContent = VIEWS[name].title;
+  document.getElementById('view-sub').textContent   = VIEWS[name].sub;
+  if (name === 'conflicts') renderConflicts(currentFilter);
+  if (name === 'harness')   renderHarness();
+}
+
+// ── Brain overview — stats from API ──────────────────────────────────────────
+async function loadStats() {
+  try {
+    const [conflicts, countData] = await Promise.all([
+      apiFetch('/conflicts'),
+      apiFetch('/entities/count'),
+    ]);
+    cachedConflicts = conflicts;
+    const open = conflicts.filter(c => c.status === 'open').length;
+    document.getElementById('conflict-count').textContent = open;
+    document.getElementById('stat-conflicts').textContent = open;
+    VIEWS.conflicts.sub = `${open} open · reviewing…`;
+
+    const total = countData.count ?? 0;
+    const facts = countData.fact_count ?? 0;
+    document.getElementById('topbar-entity-count').textContent =
+      total.toLocaleString() + ' entities';
+    document.getElementById('stat-entities').textContent = total.toLocaleString();
+    document.getElementById('stat-facts').textContent = facts.toLocaleString();
+    document.getElementById('topbar-ts').textContent = 'just now';
+  } catch (_) { /* backend unreachable — keep placeholders */ }
+}
+
+// ── Knowledge graph — D3 force-directed ──────────────────────────────────────
+const SECTOR_COLORS = {
+  Technology:     '#8b7ff0', Healthcare:  '#2dd4a0', Finance:       '#f59e0b',
+  Education:      '#b3aaff', Retail:      '#f87171', Manufacturing: '#94a3b8',
+  Hospitality:    '#34d399', Entertainment:'#a78bfa', Transportation:'#60a5fa',
+  Logistics:      '#fbbf24', Company:     '#8b7ff0', Person:        '#2dd4a0',
+  Deal:           '#f59e0b', Document:    '#94a3b8',
+};
+
+function nodeColor(d) { return SECTOR_COLORS[d.sector] || SECTOR_COLORS[d.type] || '#5e5a72'; }
+function nodeRadius(d) {
+  if (d.arr_eur && d.arr_eur > 0) return Math.max(5, Math.min(18, 4 + Math.sqrt(d.arr_eur / 800000)));
+  return d.fact_count > 10 ? 9 : d.fact_count > 3 ? 7 : 5;
+}
+
+async function loadD3() {
+  if (window.d3) return;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js';
+    s.integrity = 'sha256-xHKAHTp4TFXPUMVWHjbHOaVAMJfOGONQOtTIbHHIBrk=';
+    s.crossOrigin = 'anonymous';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function initGraph() {
+  const container = document.getElementById('graph-container');
+  if (!container) return;
+  container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:var(--mono);font-size:11px">Loading graph…</div>';
+
+  try { await loadD3(); } catch (_) {
+    container.innerHTML = '<div style="padding:20px;color:var(--muted);text-align:center;font-size:12px">D3 unavailable — check internet connection.</div>';
+    return;
+  }
+
+  let entities = [];
+  try { entities = await apiFetch('/entities?limit=400'); } catch (_) {}
+
+  if (!entities.length) {
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px">No entities loaded yet.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  const W = container.offsetWidth, H = 420;
+
+  // Cluster target positions — one per sector, arranged in a ring
+  const sectors = [...new Set(entities.map(e => e.sector || e.type || 'Other'))];
+  const clusterPos = {};
+  sectors.forEach((s, i) => {
+    const a = (i / sectors.length) * 2 * Math.PI - Math.PI / 2;
+    clusterPos[s] = { x: W / 2 + Math.cos(a) * W * 0.3, y: H / 2 + Math.sin(a) * H * 0.3 };
+  });
+
+  const nodes = entities.map(e => ({
+    ...e,
+    r: nodeRadius(e),
+    _sector: e.sector || e.type || 'Other',
+    x: (clusterPos[e.sector || e.type || 'Other']?.x || W/2) + (Math.random()-0.5)*60,
+    y: (clusterPos[e.sector || e.type || 'Other']?.y || H/2) + (Math.random()-0.5)*60,
+  }));
+
+  // Conflict edges — thin lines between entities that share a conflict cluster
+  const conflictNodes = nodes.filter(n => n.conflict_count > 0);
+  const links = [];
+  // Connect conflict nodes to their nearest same-sector conflict neighbour (sparse)
+  for (let i = 0; i < conflictNodes.length; i++) {
+    for (let j = i + 1; j < conflictNodes.length; j++) {
+      if (conflictNodes[i]._sector === conflictNodes[j]._sector && Math.random() < 0.15) {
+        links.push({ source: conflictNodes[i].id, target: conflictNodes[j].id });
+      }
+    }
+  }
+
+  const svg = d3.select('#graph-container').append('svg')
+    .attr('width', W).attr('height', H)
+    .style('background', 'var(--bg2)');
+
+  // Zoom + pan
+  const g = svg.append('g');
+  svg.call(
+    d3.zoom().scaleExtent([0.2, 6])
+      .on('zoom', e => g.attr('transform', e.transform))
+  );
+
+  // Links
+  const link = g.append('g').selectAll('line').data(links).join('line')
+    .attr('stroke', 'rgba(245,158,11,0.15)').attr('stroke-width', 1);
+
+  // Nodes
+  const node = g.append('g').selectAll('g').data(nodes).join('g')
+    .style('cursor', 'pointer')
+    .call(
+      d3.drag()
+        .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on('end',   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+    );
+
+  // Conflict glow ring
+  node.filter(d => d.conflict_count > 0).append('circle')
+    .attr('r', d => d.r + 3)
+    .attr('fill', 'none')
+    .attr('stroke', '#f59e0b')
+    .attr('stroke-width', 1.5)
+    .attr('stroke-opacity', 0.5);
+
+  // Main circle
+  node.append('circle')
+    .attr('r', d => d.r)
+    .attr('fill', d => nodeColor(d) + '22')
+    .attr('stroke', d => nodeColor(d))
+    .attr('stroke-width', 1.5);
+
+  // Label for larger nodes only
+  node.filter(d => d.r >= 10).append('text')
+    .text(d => d.name.split(/[ ,]/)[0])
+    .attr('text-anchor', 'middle').attr('dy', '0.35em')
+    .attr('fill', '#ede9f8').attr('font-size', d => Math.min(d.r * 0.65, 9))
+    .attr('font-family', "'DM Mono',monospace").style('pointer-events', 'none');
+
+  // Tooltip
+  const tip = document.getElementById('graph-tooltip');
+  node.on('mousemove', (e, d) => {
+    tip.style.display = 'block';
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top  = (e.clientY - 10) + 'px';
+    const arr = d.arr_eur ? fmtVal('arr_eur', String(d.arr_eur)) : null;
+    tip.innerHTML = `<strong style="color:var(--text)">${d.name}</strong><br>
+      <span style="color:${nodeColor(d)}">${d.sector || d.type}</span><br>
+      ${arr ? `ARR: <span style="color:var(--green)">${arr}</span><br>` : ''}
+      ${d.conflict_count ? `<span style="color:var(--amber)">⚠ ${d.conflict_count} conflict${d.conflict_count>1?'s':''}</span><br>` : ''}
+      <span style="color:var(--muted)">${d.fact_count} facts · click to brief</span>`;
+  })
+  .on('mouseleave', () => { tip.style.display = 'none'; })
+  .on('click', (e, d) => {
+    e.stopPropagation();
+    tip.style.display = 'none';
+    showView('search');
+    const inp = document.getElementById('company-search');
+    inp.value = d.name;
+    fetchEntity(d.name);
+  });
+
+  svg.on('mouseleave', () => { tip.style.display = 'none'; });
+
+  // Force simulation with cluster attraction
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(50).strength(0.3))
+    .force('charge', d3.forceManyBody().strength(d => -20 - d.r * 2))
+    .force('collide', d3.forceCollide(d => d.r + 2).iterations(2))
+    .force('cluster', () => {
+      for (const d of nodes) {
+        const cp = clusterPos[d._sector];
+        if (!cp) continue;
+        d.vx += (cp.x - d.x) * 0.012;
+        d.vy += (cp.y - d.y) * 0.012;
+      }
+    })
+    .on('tick', () => {
+      link
+        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      node.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+}
+
+// ── Conflicts view ────────────────────────────────────────────────────────────
+function filterConflicts(type) {
+  currentFilter = type;
+  ['all','rev','con','date'].forEach(id => {
+    const el = document.getElementById('f-' + id);
+    if (el) { el.style.color = ''; el.style.borderColor = ''; }
+  });
+  const btnId = {all:'f-all', revenue_figure:'f-rev', contact_person:'f-con', founding_date:'f-date'}[type] || 'f-all';
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.style.color = 'var(--purple2)'; btn.style.borderColor = 'rgba(139,127,240,.4)'; }
+  renderConflicts(type);
+}
+
+async function renderConflicts(filter) {
+  const container = document.getElementById('conflicts-container');
+  container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:11px">Loading conflicts…</div>';
+
+  if (cachedConflicts.length === 0) {
+    try {
+      cachedConflicts = await apiFetch('/conflicts');
+    } catch (e) {
+      container.innerHTML = '<div style="padding:24px;color:var(--red);font-size:12px;text-align:center">Could not reach the API. Is the server running on port 8000?</div>';
+      return;
+    }
+  }
+
+  // Open = not yet locally resolved + status open; also show recently resolved
+  const open = cachedConflicts.filter(c =>
+    c.status === 'open' && !resolved.has(c.conflict_id) &&
+    (filter === 'all' || conflictType(c.attribute) === filter)
+  );
+  const done = cachedConflicts.filter(c =>
+    resolved.has(c.conflict_id) &&
+    (filter === 'all' || conflictType(c.attribute) === filter)
+  );
+  const list = [...open, ...done];
+
+  if (list.length === 0) {
+    container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px">No conflicts in this category.</div>';
+    return;
+  }
+
+  container.innerHTML = list.map(c => {
+    const id = c.conflict_id;
+    if (resolved.has(id)) {
+      return `<div class="conflict-item">
+        <div class="conflict-header">
+          <span class="conflict-entity">${esc(c.entity_name)}</span>
+          <span class="conflict-attr">${esc(fmtAttr(c.attribute))}</span>
+          <span class="resolved-tag" style="margin-left:auto">resolved</span>
+        </div>
+      </div>`;
+    }
+    const delta = calcDelta(c.value_a, c.value_b);
+    const va    = esc(fmtVal(c.attribute, c.value_a));
+    const vb    = esc(fmtVal(c.attribute, c.value_b));
+    const sa    = esc(srcLabel(c.source_a));
+    const sb    = esc(srcLabel(c.source_b));
+    const saId  = esc(id);
+    return `<div class="conflict-item">
+      <div class="conflict-header">
+        <span class="conflict-entity">${esc(c.entity_name)}</span>
+        <span class="conflict-attr">${esc(fmtAttr(c.attribute))}</span>
+        ${delta ? `<span class="conflict-delta">Δ ${esc(delta)}</span>` : ''}
+      </div>
+      <div class="vs-row">
+        <div class="vs-box"><div class="vs-val">${va}</div><div class="vs-src">${sa}</div></div>
+        <div class="vs-sep">vs</div>
+        <div class="vs-box"><div class="vs-val">${vb}</div><div class="vs-src">${sb}</div></div>
+      </div>
+      <div class="action-row">
+        <button class="btn btn-a" onclick="resolve('${saId}')">Accept ${sa}</button>
+        <button class="btn btn-b" onclick="resolve('${saId}')">Accept ${sb}</button>
+        <button class="btn" onclick="resolve('${saId}')">Flag for founder</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function resolve(id) {
+  resolved.add(id);
+  const open = cachedConflicts.filter(c => c.status === 'open' && !resolved.has(c.conflict_id)).length;
+  document.getElementById('conflict-count').textContent = open;
+  document.getElementById('stat-conflicts').textContent = open;
+  renderConflicts(currentFilter);
+  // Persist to backend — fire and forget (UI already updated optimistically)
+  fetch(API + '/conflicts/' + encodeURIComponent(id) + '/resolve', {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({resolution: 'human_resolved'}),
+  }).catch(() => { /* non-critical — local state is already updated */ });
+}
+
+// ── Company brief ─────────────────────────────────────────────────────────────
+function searchCompany(val) {
+  clearTimeout(_searchTimer);
+  if (!val || val.length < 2) {
+    document.getElementById('brief-container').innerHTML =
+      '<div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Search a company to see everything VCbrain knows.<br>Every fact is traceable to its source.</div></div>';
+    return;
+  }
+  _searchTimer = setTimeout(() => fetchEntity(val), 400);
+}
+
+async function fetchEntity(name) {
+  const container = document.getElementById('brief-container');
+  container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:11px">Searching…</div>';
+  try {
+    const data = await apiFetch('/entity/' + encodeURIComponent(name));
+    renderEntityBrief(data);
+  } catch (e) {
+    if (e.status === 404) {
+      container.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><div class="empty-text">No entity found for "<strong>${name}</strong>".<br>Try a name exactly as it appears in your dataset.</div></div>`;
+    } else {
+      container.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Error loading data — is the backend running?</div></div>`;
+    }
+  }
+}
+
+function renderEntityBrief(data) {
+  const entity    = data.entity;
+  const facts     = data.facts    || [];
+  const conflicts = data.conflicts || [];
+
+  const conflictAttrs = new Set(conflicts.map(c => c.attribute));
+  const factMap = {};
+  facts.forEach(f => { if (!factMap[f.attribute]) factMap[f.attribute] = f; });
+
+  // Extract header pills from known fact attributes
+  const sector = factMap.sector?.value || factMap.industry?.value || '';
+  const stage  = factMap.stage?.value  || '';
+  const status = factMap.deal_status?.value || factMap.status?.value || '';
+
+  const rows = facts.map(f => {
+    const p  = Math.round(f.confidence * 100);
+    const cl = p >= 90 ? 'cf-high' : p >= 70 ? 'cf-mid' : 'cf-low';
+    const hasConflict = conflictAttrs.has(f.attribute);
+    const sType = f.source?.type || '';
+    return `<tr>
+      <td><span class="fact-attr">${esc(fmtAttr(f.attribute))}</span></td>
+      <td class="${hasConflict ? 'fact-conflict' : ''}">${esc(fmtVal(f.attribute, f.value))}${hasConflict ? ' &#9888;' : ''}</td>
+      <td><div class="conf-bar"><div class="conf-fill ${cl}" style="width:${p}%"></div></div></td>
+      <td><span class="src-pill ${srcClass(sType)}">${esc(srcLabel(sType))}</span></td>
+    </tr>`;
+  }).join('');
+
+  const conflictSummary = conflicts.length > 0
+    ? `<span style="color:var(--amber)">&#9888; ${conflicts.length} open conflict${conflicts.length > 1 ? 's' : ''} flagged:</span> ` +
+      conflicts.map(c => `${esc(fmtAttr(c.attribute))}: ${esc(fmtVal(c.attribute, c.value_a))} vs ${esc(fmtVal(c.attribute, c.value_b))}`).join('; ') + '. Verify before IC.'
+    : 'No conflicts detected — all facts are consistent across sources.';
+
+  const pills = [
+    sector ? `<span class="pill pill-purple">${esc(sector)}</span>`         : '',
+    stage  ? `<span class="pill pill-green">${esc(stage)}</span>`            : '',
+    status ? `<span class="pill pill-amber">${esc(status)}</span>`           : '',
+    conflicts.length ? `<span class="pill pill-amber">${conflicts.length} conflict${conflicts.length>1?'s':''}</span>` : '',
+  ].join('');
+
+  const container = document.getElementById('brief-container');
+  container.innerHTML = `
+    <div class="card">
+      <div class="brief-header">
+        <div class="brief-name">${esc(entity.name)}</div>
+        <div class="pill-row">${pills}</div>
+      </div>
+      <div class="brief-ai" id="brief-ai-section">
+        <div class="brief-ai-label">VCbrain — fact summary</div>
+        <div class="brief-ai-text" id="brief-ai-text">
+          ${conflictSummary}
+          <div style="margin-top:10px">
+            <button class="btn btn-a" id="brief-btn">Generate AI brief →</button>
+          </div>
+        </div>
+      </div>
+      <table class="facts-table">
+        <thead><tr><th>Attribute</th><th>Value</th><th>Confidence</th><th>Source</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" style="padding:16px;color:var(--muted)">No facts recorded.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+  // Wire brief button via addEventListener — avoids any need to escape name into onclick
+  document.getElementById('brief-btn').addEventListener('click', () => generateBrief(entity.name));
+}
+
+async function generateBrief(companyName) {
+  const btn = document.getElementById('brief-btn');
+  const textEl = document.getElementById('brief-ai-text');
+  btn.textContent = 'Generating…'; btn.disabled = true;
+  try {
+    const brief = await apiFetch('/brief/' + encodeURIComponent(companyName));
+    const verdictColor = {strong_pass:'var(--green)', pass:'var(--green)', borderline:'var(--amber)', fail:'var(--red)'};
+    const col = verdictColor[brief.verdict] || 'var(--muted2)';
+    const redFlags = (brief.red_flags || []).length
+      ? `<div style="margin-top:6px;color:var(--red)">Red flags: ${brief.red_flags.join(' · ')}</div>` : '';
+    const qs = (brief.questions_for_founder || []).slice(0, 2).length
+      ? `<div style="margin-top:6px;color:var(--muted2)">Questions: ${brief.questions_for_founder.slice(0,2).join(' · ')}</div>` : '';
+    textEl.innerHTML = `
+      <div style="margin-bottom:6px">
+        <span style="font-family:var(--mono);font-size:10px;color:${col};letter-spacing:.08em">
+          ${brief.verdict.replace(/_/g,' ').toUpperCase()}
+        </span>
+      </div>
+      ${brief.one_line_summary}
+      ${redFlags}${qs}`;
+  } catch (e) {
+    const msg = e.status === 503
+      ? 'Set ANTHROPIC_API_KEY in your environment, then restart the server.'
+      : `Error: ${esc(e.message)}`;
+    btn.textContent = 'Retry →';
+    btn.disabled = false;
+    btn.onclick = null;
+    btn.addEventListener('click', () => generateBrief(companyName), {once: true});
+    textEl.innerHTML = `<span style="color:var(--red)">${msg}</span>`;
+    textEl.appendChild(document.createElement('br'));
+    textEl.appendChild(btn);
+  }
+}
+
+// ── Harness evolution (static — will show real data once ph run completes) ────
+const ITERS = [
+  {iter:'iter_0', score:.41, note:'Baseline — no evolution yet',       best:false},
+];
+
+function renderHarness() {
+  // Try to load real evolution data from agent API; fall back to ITERS
+  apiFetch('http://localhost:8001/agent/evolution').then(data => {
+    const iters = (data.iterations || []).map((it, i) => ({
+      iter: `iter_${i}`, score: it.score, note: it.summary || '', best: it.is_best,
+    }));
+    if (iters.length) renderIterRows(iters);
+    else renderIterRows(ITERS);
+  }).catch(() => renderIterRows(ITERS));
+}
+
+function renderIterRows(iters) {
+  document.getElementById('harness-iters').innerHTML = iters.map(h =>
+    `<div class="iter-row">
+      <span class="iter-label">${h.iter}</span>
+      <div class="iter-bar"><div class="iter-fill" style="width:${Math.round(h.score * 100)}%"></div></div>
+      <span class="iter-score">${h.score.toFixed(2)}</span>
+      <span class="iter-note">${h.note} ${h.best ? '<span class="best-tag">best</span>' : ''}</span>
+    </div>`
+  ).join('');
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+async function sendChat() {
+  const inp = document.getElementById('chat-input');
+  const msg = inp.value.trim();
+  if (!msg) return;
+  inp.value = ''; inp.style.height = '42px';
+  document.getElementById('sugg-bar').style.display = 'none';
+  appendMsg(msg, 'user');
+  const typing = appendTyping();
+  try {
+    const resp = await buildChatResponse(msg);
+    typing.remove();
+    appendMsg(resp, 'ai');
+  } catch (_) {
+    typing.remove();
+    appendMsg("I ran into an error reaching the backend. Is the server running?", 'ai');
+  }
+}
+
+async function buildChatResponse(msg) {
+  const l = msg.toLowerCase();
+
+  // Detect "what do you know about X" / "brief me on X" / "tell me about X"
+  const aboutMatch = msg.match(/(?:about|on|brief(?:me on)?|tell me about)\s+(.+?)(?:\?|$)/i);
+  if (aboutMatch || l.includes('conflict')) {
+    if (l.includes('conflict')) {
+      const conflicts = cachedConflicts.length ? cachedConflicts
+        : await apiFetch('/conflicts').catch(() => []);
+      const open = conflicts.filter(c => c.status === 'open').length;
+      const top3 = conflicts.filter(c => c.status === 'open').slice(0,3)
+        .map(c => `<span class="fact-tag">${esc(c.entity_name)} · ${esc(fmtAttr(c.attribute))}</span>`)
+        .join(' ');
+      return `You have <strong style="color:var(--amber)">${open} open conflicts</strong> requiring review.<br><br>Top priorities: ${top3 || 'none'}<br><br>Open the Conflict queue to review and resolve each one.`;
+    }
+    if (aboutMatch) {
+      const companyName = aboutMatch[1].trim();
+      try {
+        const data = await apiFetch('/entity/' + encodeURIComponent(companyName));
+        const facts = data.facts || [];
+        const conflicts = data.conflicts || [];
+        const factMap = {};
+        facts.forEach(f => { if (!factMap[f.attribute]) factMap[f.attribute] = f; });
+        const tags = ['arr_eur','mrr_eur','sector','stage','deal_status']
+          .filter(k => factMap[k])
+          .map(k => `<span class="fact-tag">${esc(fmtAttr(k))}: ${esc(fmtVal(k, factMap[k].value))}</span>`)
+          .join(' ');
+        const conflictNote = conflicts.length
+          ? `<br><br><strong style="color:var(--amber)">&#9888; ${conflicts.length} open conflict${conflicts.length>1?'s':''}</strong> on this entity — check the Conflict queue.`
+          : '<br><br>No conflicts detected.';
+        return `<strong>${esc(data.entity.name)}</strong><br><br>${tags}${conflictNote}<br><br>Open "Company brief" and search for this company to see all ${facts.length} facts with full provenance.`;
+      } catch (e) {
+        if (e.status === 404)
+          return `I don't have <strong>${esc(aboutMatch[1])}</strong> in the fact graph. Try searching by exact name in Company brief.`;
+      }
+    }
+  }
+
+  if (l.includes('harness') || l.includes('evolut') || l.includes('smarter'))
+    return `The harness evolution loop is set up and ready. Run <span class="fact-tag">ph run --max-iterations 5</span> to start the first cycle. The harness score will improve as VCbrain learns from evaluation feedback.`;
+
+  return `I can look up any company in the fact graph. Try: <em>"What do you know about Hogan PLC?"</em> or <em>"What conflicts need attention?"</em>`;
+}
+
+function appendMsg(text, role) {
+  const msgs = document.getElementById('chat-messages');
+  const d = document.createElement('div');
+  d.className = 'msg' + (role === 'user' ? ' user' : '');
+  // user input is escaped; AI responses are trusted HTML (built internally)
+  const content = role === 'user' ? esc(text) : text;
+  d.innerHTML = `<div class="msg-avatar ${role==='user'?'av-user':'av-ai'}">${role==='user'?'EC':'VC'}</div><div class="msg-bubble">${content}</div>`;
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight; return d;
+}
+
+function appendTyping() {
+  const msgs = document.getElementById('chat-messages');
+  const d = document.createElement('div'); d.className = 'msg';
+  d.innerHTML = `<div class="msg-avatar av-ai">VC</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight; return d;
+}
+
+function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }
+function resize(el)   { el.style.height = '42px'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
+function sendSugg(t)  { document.getElementById('chat-input').value = t; sendChat(); }
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  setTimeout(initGraph, 100);
+  loadStats();
+});
+</script>
+</body>
+</html>

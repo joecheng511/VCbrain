@@ -1,0 +1,47 @@
+[
+  {
+    "file": "pitch_solarix_energy_gmbh.pdf",
+    "company": "Solarix Energy GmbH",
+    "sector": "CleanTech",
+    "stage": "Seed",
+    "arr_in_deck": "\u20ac520K",
+    "conflict_note": "Pitch deck states \u20ac520K ARR \u2014 CRM record shows \u20ac480K. Delta: 8.3%. Flagged for human review.",
+    "source_type": "pitch_deck_pdf"
+  },
+  {
+    "file": "pitch_logichain_ai_ug.pdf",
+    "company": "LogiChain AI UG",
+    "sector": "Logistics / AI",
+    "stage": "Pre-Seed",
+    "arr_in_deck": "\u20ac65K",
+    "conflict_note": "Pitch deck states founded 2023 \u2014 CRM record shows 2024. Possible pre-incorporation activity. Flagged.",
+    "source_type": "pitch_deck_pdf"
+  },
+  {
+    "file": "pitch_climateledger_ug.pdf",
+    "company": "ClimateLedger UG",
+    "sector": "CleanTech / SaaS",
+    "stage": "Pre-Seed",
+    "arr_in_deck": "\u20ac12K",
+    "conflict_note": "Primary contact in pitch is Sarah Hoffmann (CEO) \u2014 CRM record lists Lukas Chen. Flagged for update.",
+    "source_type": "pitch_deck_pdf"
+  },
+  {
+    "file": "pitch_cybershield_east_gmbh.pdf",
+    "company": "CyberShield East GmbH",
+    "sector": "Cybersecurity",
+    "stage": "Pre-Seed",
+    "arr_in_deck": "\u20ac0",
+    "conflict_note": "Pre-revenue. No ARR conflict. Verify pilot conversion timeline with founders.",
+    "source_type": "pitch_deck_pdf"
+  },
+  {
+    "file": "pitch_urbanmobility_labs_gmbh.pdf",
+    "company": "UrbanMobility Labs GmbH",
+    "sector": "Mobility / SaaS",
+    "stage": "Seed",
+    "arr_in_deck": "\u20ac950K",
+    "conflict_note": "Pitch deck states \u20ac950K ARR \u2014 CRM record shows \u20ac890K. Delta: 6.7%. Possibly includes LOI pipeline. Flagged.",
+    "source_type": "pitch_deck_pdf"
+  }
+]

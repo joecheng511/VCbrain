@@ -1,162 +1,82 @@
 [
   {
-    "input": "Acme Analytics",
+    "input": "Shah, Smith and Gilmore",
     "expected": {
       "verdict": "strong_pass",
-      "must_mention": ["ARR", "$2M", "3x YoY", "data analytics", "12"],
-      "must_not_hallucinate": ["Series A", "50 employees", "IPO", "profitability confirmed"]
+      "must_mention": ["Technology", "46", "series_b", "accepted"],
+      "must_not_hallucinate": ["seed stage", "FDA rejected", "ARR conflict", "declining revenue", "runway"]
     }
   },
   {
-    "input": "DataVault Inc",
+    "input": "Mclaughlin, Gonzalez and Reynolds",
+    "expected": {
+      "verdict": "strong_pass",
+      "must_mention": ["Hospitality", "37", "series_b", "accepted"],
+      "must_not_hallucinate": ["seed", "FDA", "conflict", "declining", "runway"]
+    }
+  },
+  {
+    "input": "Henderson, Brown and James",
     "expected": {
       "verdict": "pass",
-      "must_mention": ["ARR", "$500K", "2x YoY", "zero-knowledge", "data infrastructure"],
-      "must_not_hallucinate": ["Series A", "profitable", "100 customers", "AI feature"]
+      "must_mention": ["Retail", "22", "series_b", "accepted"],
+      "must_not_hallucinate": ["conflict", "seed stage", "FDA", "regulatory block"]
     }
   },
   {
-    "input": "NeuralEdge Systems",
-    "expected": {
-      "verdict": "borderline",
-      "must_mention": ["pre-revenue", "edge inference", "pilot", "provisional patents"],
-      "must_not_hallucinate": ["paying customers", "ARR $1M", "FDA cleared", "Series A closed"]
-    }
-  },
-  {
-    "input": "CloudStream Tech",
-    "expected": {
-      "verdict": "strong_pass",
-      "must_mention": ["ARR", "$5M", "2.5x YoY", "128%", "47", "Series A"],
-      "must_not_hallucinate": ["Series B closed", "200 employees", "IPO planned", "government contract"]
-    }
-  },
-  {
-    "input": "FinFlow Solutions",
-    "expected": {
-      "verdict": "borderline",
-      "must_mention": ["ARR conflict", "FCA", "EMI licence", "$1.2M", "$800K"],
-      "must_not_hallucinate": ["ARR confirmed $2M", "FCA approved", "profitable", "US banking licence"]
-    }
-  },
-  {
-    "input": "MediTrack AI",
-    "expected": {
-      "verdict": "fail",
-      "must_mention": ["FDA", "510k rejected", "4 months runway", "burn rate", "$180K"],
-      "must_not_hallucinate": ["FDA approved", "12 months runway", "profitable", "hospital contracts signed"]
-    }
-  },
-  {
-    "input": "Quantum Compute Labs",
-    "expected": {
-      "verdict": "borderline",
-      "must_mention": ["pre-revenue", "DARPA", "$2M grant", "MIT", "TRL"],
-      "must_not_hallucinate": ["paying customers", "commercial product launched", "Series A", "profitable"]
-    }
-  },
-  {
-    "input": "RetailGenius",
-    "expected": {
-      "verdict": "strong_pass",
-      "must_mention": ["ARR", "$3.2M", "4x YoY", "72%", "gross margin"],
-      "must_not_hallucinate": ["Series B", "international expansion complete", "profitable", "500 customers"]
-    }
-  },
-  {
-    "input": "SecureVault Networks",
+    "input": "Montoya, Evans and Alvarado",
     "expected": {
       "verdict": "pass",
-      "must_mention": ["ARR", "$1.8M", "2.2x YoY", "SOC2", "ISO 27001"],
-      "must_not_hallucinate": ["government contract", "Series B", "100 employees", "profitable"]
+      "must_mention": ["Healthcare", "35", "series_b", "accepted"],
+      "must_not_hallucinate": ["seed", "FDA rejected", "ARR conflict", "declining revenue"]
     }
   },
   {
-    "input": "TalentBridge Pro",
-    "expected": {
-      "verdict": "fail",
-      "must_mention": ["ARR declining", "$900K", "38% churn", "LinkedIn", "shrinking"],
-      "must_not_hallucinate": ["ARR growing", "churn under control", "new product line launched", "profitable"]
-    }
-  },
-  {
-    "input": "EcoLogic Systems",
-    "expected": {
-      "verdict": "pass",
-      "must_mention": ["ARR", "$1.1M", "2.8x YoY", "carbon offset", "EU corporates"],
-      "must_not_hallucinate": ["government subsidy confirmed", "Series A closed", "100 corporate clients", "profitable"]
-    }
-  },
-  {
-    "input": "HealthSync AI",
-    "expected": {
-      "verdict": "strong_pass",
-      "must_mention": ["ARR", "$4.5M", "3.5x YoY", "HIPAA", "FHIR", "12 hospital"],
-      "must_not_hallucinate": ["FDA drug approval", "Series B closed", "500 hospitals", "profitable"]
-    }
-  },
-  {
-    "input": "PropTech Dynamics",
+    "input": "Hogan PLC",
     "expected": {
       "verdict": "borderline",
-      "must_mention": ["ARR", "$750K", "rate hike", "revenue fell 40%", "growth conflict"],
-      "must_not_hallucinate": ["ARR $3M", "residential pivot complete", "profitable", "100 real estate clients"]
+      "must_mention": ["conflict", "Education", "47"],
+      "must_not_hallucinate": ["ARR confirmed", "no conflicts", "clean financials", "strong_pass"]
     }
   },
   {
-    "input": "AutoFleet Solutions",
-    "expected": {
-      "verdict": "fail",
-      "must_mention": ["no deployment licence", "3 months runway", "burn rate", "Waymo", "Aurora"],
-      "must_not_hallucinate": ["commercial licence granted", "profitable", "100 vehicles deployed", "government contract"]
-    }
-  },
-  {
-    "input": "EdTech Pioneers",
+    "input": "Brewer-Henry",
     "expected": {
       "verdict": "borderline",
-      "must_mention": ["ARR", "$600K", "LTV:CAC", "1.5x", "Khan Academy", "Duolingo"],
-      "must_not_hallucinate": ["LTV:CAC 5x", "profitable", "1M users", "government contract"]
+      "must_mention": ["conflict", "Education", "6"],
+      "must_not_hallucinate": ["no conflicts", "ARR confirmed", "poc accepted", "clean data"]
     }
   },
   {
-    "input": "SupplyChain AI",
+    "input": "Johnson-Roberts",
     "expected": {
-      "verdict": "pass",
-      "must_mention": ["ARR", "$2.4M", "2.1x YoY", "22 mid-market", "manufacturers"],
-      "must_not_hallucinate": ["Series B closed", "500 customers", "profitable", "government contract"]
+      "verdict": "borderline",
+      "must_mention": ["conflict", "Manufacturing", "46"],
+      "must_not_hallucinate": ["no conflicts", "ARR confirmed", "seed stage", "clean financials"]
     }
   },
   {
-    "input": "LegalAI Pro",
+    "input": "Underwood, Johnston and Hines",
     "expected": {
-      "verdict": "strong_pass",
-      "must_mention": ["ARR", "$3.8M", "3.2x YoY", "135%", "AmLaw 100", "law firm"],
-      "must_not_hallucinate": ["IPO filed", "Series C", "profitable", "500 law firms"]
+      "verdict": "borderline",
+      "must_mention": ["conflict", "Education", "54"],
+      "must_not_hallucinate": ["ARR confirmed", "no conflicts", "clean data", "strong_pass"]
     }
   },
   {
-    "input": "MarketMind Analytics",
+    "input": "Parker Group",
     "expected": {
-      "verdict": "pass",
-      "must_mention": ["ARR", "$1.6M", "2.3x YoY", "78% gross margin", "attribution"],
-      "must_not_hallucinate": ["Series B", "profitable", "1000 customers", "international offices"]
+      "verdict": "borderline",
+      "must_mention": ["Hospitality", "series_a", "1", "accepted"],
+      "must_not_hallucinate": ["series_b", "large ARR", "profitable", "no diligence needed"]
     }
   },
   {
-    "input": "BioSignal Tech",
+    "input": "Austin, Day and Johnson",
     "expected": {
-      "verdict": "fail",
-      "must_mention": ["pre-revenue", "FDA Class II", "6 months runway", "Medtronic", "patent contested"],
-      "must_not_hallucinate": ["FDA cleared", "paying customers", "profitable", "Series A closed"]
-    }
-  },
-  {
-    "input": "DevOps Velocity",
-    "expected": {
-      "verdict": "strong_pass",
-      "must_mention": ["ARR", "$4.1M", "3.8x YoY", "142%", "180K GitHub stars", "12K paying teams"],
-      "must_not_hallucinate": ["IPO filed", "Series C", "profitable confirmed", "1M teams"]
+      "verdict": "borderline",
+      "must_mention": ["seed", "Entertainment", "657"],
+      "must_not_hallucinate": ["series_b", "large ARR", "profitable", "mature revenue"]
     }
   }
 ]
