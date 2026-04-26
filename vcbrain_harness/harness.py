@@ -50,15 +50,16 @@ Reply with ONLY a JSON object — no markdown, no explanation outside the JSON:
 
 
 def _load_prompt() -> str:
-    """Return the evolved prompt if saved, otherwise the base prompt."""
+    """Return the evolved prompt if saved and valid, otherwise the base prompt."""
     try:
         import pathlib, json as _json
         state_file = pathlib.Path(__file__).parent.parent / "vcbrain_tasks" / "evolution_state.json"
         if state_file.exists():
             state = _json.loads(state_file.read_text(encoding="utf-8"))
             evolved = state.get("best_prompt", "").strip()
-            # Only use evolved prompt if it still contains the required placeholders
             if evolved and "{facts_block}" in evolved and "{conflicts_block}" in evolved:
+                # Validate that .format() won't throw KeyError on stray { } characters
+                evolved.format(facts_block="", conflicts_block="")
                 return evolved
     except Exception:
         pass
