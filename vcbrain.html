@@ -63,7 +63,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .conflict-item:last-child{border-bottom:none}
 .conflict-item:hover{background:rgba(255,255,255,.015)}
 .conflict-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.conflict-entity{font-size:13px;font-weight:500}
+.conflict-entity{font-size:13px;font-weight:500;cursor:pointer;border-bottom:1px solid transparent;transition:border-color .12s,color .12s}
+.conflict-entity:hover{color:var(--purple2);border-bottom-color:rgba(139,127,240,.4)}
+.src-link{font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:4px;border:1px solid transparent;transition:all .12s;white-space:nowrap}
+.src-link:hover{color:var(--purple2);border-color:rgba(139,127,240,.3);background:rgba(139,127,240,.06)}
 .conflict-attr{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--bg3);padding:2px 7px;border-radius:4px}
 .conflict-delta{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--amber)}
 .vs-row{display:grid;grid-template-columns:1fr 28px 1fr;gap:8px;align-items:center;margin-bottom:10px}
@@ -455,8 +458,6 @@ async function loadD3() {
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js';
-    s.integrity = 'sha256-xHKAHTp4TFXPUMVWHjbHOaVAMJfOGONQOtTIbHHIBrk=';
-    s.crossOrigin = 'anonymous';
     s.onload = resolve; s.onerror = reject;
     document.head.appendChild(s);
   });
@@ -481,119 +482,204 @@ async function initGraph() {
   }
 
   container.innerHTML = '';
-  const W = container.offsetWidth, H = 420;
+  const W = container.offsetWidth, H = 440;
 
-  // Cluster target positions — one per sector, arranged in a ring
-  const sectors = [...new Set(entities.map(e => e.sector || e.type || 'Other'))];
+  // ── Cluster positions: one per sector in a ring ────────────────────────────
+  const sectors = [...new Set(entities.map(e => e.sector || 'Other'))].sort();
   const clusterPos = {};
   sectors.forEach((s, i) => {
     const a = (i / sectors.length) * 2 * Math.PI - Math.PI / 2;
-    clusterPos[s] = { x: W / 2 + Math.cos(a) * W * 0.3, y: H / 2 + Math.sin(a) * H * 0.3 };
+    clusterPos[s] = { x: W / 2 + Math.cos(a) * W * 0.31, y: H / 2 + Math.sin(a) * H * 0.30 };
   });
 
   const nodes = entities.map(e => ({
     ...e,
     r: nodeRadius(e),
-    _sector: e.sector || e.type || 'Other',
-    x: (clusterPos[e.sector || e.type || 'Other']?.x || W/2) + (Math.random()-0.5)*60,
-    y: (clusterPos[e.sector || e.type || 'Other']?.y || H/2) + (Math.random()-0.5)*60,
+    _sector: e.sector || 'Other',
+    x: (clusterPos[e.sector || 'Other']?.x ?? W / 2) + (Math.random() - 0.5) * 50,
+    y: (clusterPos[e.sector || 'Other']?.y ?? H / 2) + (Math.random() - 0.5) * 50,
   }));
 
-  // Conflict edges — thin lines between entities that share a conflict cluster
-  const conflictNodes = nodes.filter(n => n.conflict_count > 0);
+  // ── Meaningful links ───────────────────────────────────────────────────────
+  // Within each sector: chain nodes by ARR rank (shows competitive landscape)
+  const sectorGroups = {};
+  nodes.forEach(n => {
+    (sectorGroups[n._sector] = sectorGroups[n._sector] || []).push(n);
+  });
+
   const links = [];
-  // Connect conflict nodes to their nearest same-sector conflict neighbour (sparse)
-  for (let i = 0; i < conflictNodes.length; i++) {
-    for (let j = i + 1; j < conflictNodes.length; j++) {
-      if (conflictNodes[i]._sector === conflictNodes[j]._sector && Math.random() < 0.15) {
-        links.push({ source: conflictNodes[i].id, target: conflictNodes[j].id });
+
+  for (const [sector, group] of Object.entries(sectorGroups)) {
+    const ranked = [...group].sort((a, b) => (b.arr_eur || 0) - (a.arr_eur || 0));
+    for (let i = 0; i < ranked.length; i++) {
+      // Each node connects to its next 1-2 peers (fan out more for top nodes)
+      const fanOut = i < 5 ? 2 : 1;
+      for (let k = 1; k <= fanOut && i + k < ranked.length; k++) {
+        links.push({ source: ranked[i].id, target: ranked[i + k].id, ltype: 'sector', sector });
       }
     }
   }
 
+  // Cross-sector bridges: top company in each sector connects to top in next sector
+  const sectorKeys = Object.keys(sectorGroups);
+  for (let i = 0; i < sectorKeys.length; i++) {
+    const s1 = sectorKeys[i], s2 = sectorKeys[(i + 1) % sectorKeys.length];
+    const top1 = sectorGroups[s1].reduce((a, b) => (b.arr_eur || 0) > (a.arr_eur || 0) ? b : a);
+    const top2 = sectorGroups[s2].reduce((a, b) => (b.arr_eur || 0) > (a.arr_eur || 0) ? b : a);
+    if (top1.id !== top2.id) links.push({ source: top1.id, target: top2.id, ltype: 'bridge' });
+  }
+
+  // ── SVG canvas ────────────────────────────────────────────────────────────
   const svg = d3.select('#graph-container').append('svg')
     .attr('width', W).attr('height', H)
     .style('background', 'var(--bg2)');
 
-  // Zoom + pan
   const g = svg.append('g');
   svg.call(
-    d3.zoom().scaleExtent([0.2, 6])
-      .on('zoom', e => g.attr('transform', e.transform))
+    d3.zoom().scaleExtent([0.15, 8])
+      .on('zoom', ev => g.attr('transform', ev.transform))
   );
 
-  // Links
-  const link = g.append('g').selectAll('line').data(links).join('line')
-    .attr('stroke', 'rgba(245,158,11,0.15)').attr('stroke-width', 1);
+  // ── Sector labels (background) ────────────────────────────────────────────
+  const labelG = g.append('g').attr('pointer-events', 'none');
+  sectors.forEach(s => {
+    const cp = clusterPos[s];
+    if (!cp) return;
+    labelG.append('text')
+      .attr('x', cp.x).attr('y', cp.y)
+      .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
+      .attr('fill', SECTOR_COLORS[s] || '#5e5a72')
+      .attr('font-size', 22).attr('font-weight', 700)
+      .attr('font-family', "'DM Sans',sans-serif")
+      .attr('opacity', 0.07)
+      .text(s.toUpperCase());
+  });
 
-  // Nodes
+  // ── Links ─────────────────────────────────────────────────────────────────
+  const link = g.append('g').selectAll('line').data(links).join('line')
+    .attr('stroke', d =>
+      d.ltype === 'bridge'
+        ? 'rgba(255,255,255,0.04)'
+        : (SECTOR_COLORS[d.sector] || '#5e5a72') + '30'
+    )
+    .attr('stroke-width', d => d.ltype === 'bridge' ? 0.5 : 1);
+
+  // ── Nodes ─────────────────────────────────────────────────────────────────
   const node = g.append('g').selectAll('g').data(nodes).join('g')
     .style('cursor', 'pointer')
     .call(
       d3.drag()
-        .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-        .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
-        .on('end',   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+        .on('start', (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag',  (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+        .on('end',   (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
     );
 
-  // Conflict glow ring
+  // ── Clean nodes: solid filled dot, sized by ARR ──────────────────────────
+  node.filter(d => d.conflict_count === 0).append('circle')
+    .attr('r', d => d.r)
+    .attr('fill', d => nodeColor(d))
+    .attr('opacity', 0.55);
+
+  // ── Conflict nodes: hollow ring — stands out against the filled dots ──────
+  // Outer amber pulse ring
   node.filter(d => d.conflict_count > 0).append('circle')
-    .attr('r', d => d.r + 3)
+    .attr('r', d => d.r + 5)
     .attr('fill', 'none')
     .attr('stroke', '#f59e0b')
     .attr('stroke-width', 1.5)
-    .attr('stroke-opacity', 0.5);
+    .attr('stroke-opacity', 0.5)
+    .attr('stroke-dasharray', '3 2');
 
-  // Main circle
-  node.append('circle')
+  // Inner hollow circle (sector-colored stroke, no fill)
+  node.filter(d => d.conflict_count > 0).append('circle')
     .attr('r', d => d.r)
-    .attr('fill', d => nodeColor(d) + '22')
+    .attr('fill', 'none')
     .attr('stroke', d => nodeColor(d))
-    .attr('stroke-width', 1.5);
+    .attr('stroke-width', 2);
 
-  // Label for larger nodes only
-  node.filter(d => d.r >= 10).append('text')
-    .text(d => d.name.split(/[ ,]/)[0])
-    .attr('text-anchor', 'middle').attr('dy', '0.35em')
-    .attr('fill', '#ede9f8').attr('font-size', d => Math.min(d.r * 0.65, 9))
-    .attr('font-family', "'DM Mono',monospace").style('pointer-events', 'none');
+  // Conflict count badge — small amber dot at top-right
+  node.filter(d => d.conflict_count > 0).append('circle')
+    .attr('r', 3)
+    .attr('cx', d => d.r * 0.7)
+    .attr('cy', d => -d.r * 0.7)
+    .attr('fill', '#f59e0b');
 
-  // Tooltip
+  // Node labels: show for nodes with higher ARR (r >= 9) or any conflict node
+  node.filter(d => d.r >= 9 || d.conflict_count > 0).append('text')
+    .text(d => {
+      const name = d.name;
+      // Trim to ~14 chars so labels stay readable
+      return name.length > 14 ? name.slice(0, 13) + '…' : name;
+    })
+    .attr('text-anchor', 'middle')
+    .attr('dy', d => d.r + 10)
+    .attr('fill', d => nodeColor(d))
+    .attr('font-size', 8)
+    .attr('font-family', "'DM Mono',monospace")
+    .attr('opacity', 0.75)
+    .style('pointer-events', 'none');
+
+  // ── Tooltip ───────────────────────────────────────────────────────────────
   const tip = document.getElementById('graph-tooltip');
-  node.on('mousemove', (e, d) => {
-    tip.style.display = 'block';
-    tip.style.left = (e.clientX + 14) + 'px';
-    tip.style.top  = (e.clientY - 10) + 'px';
-    const arr = d.arr_eur ? fmtVal('arr_eur', String(d.arr_eur)) : null;
-    tip.innerHTML = `<strong style="color:var(--text)">${d.name}</strong><br>
-      <span style="color:${nodeColor(d)}">${d.sector || d.type}</span><br>
-      ${arr ? `ARR: <span style="color:var(--green)">${arr}</span><br>` : ''}
-      ${d.conflict_count ? `<span style="color:var(--amber)">⚠ ${d.conflict_count} conflict${d.conflict_count>1?'s':''}</span><br>` : ''}
-      <span style="color:var(--muted)">${d.fact_count} facts · click to brief</span>`;
-  })
-  .on('mouseleave', () => { tip.style.display = 'none'; })
-  .on('click', (e, d) => {
-    e.stopPropagation();
-    tip.style.display = 'none';
-    showView('search');
-    const inp = document.getElementById('company-search');
-    inp.value = d.name;
-    fetchEntity(d.name);
-  });
+  node
+    .on('mousemove', (ev, d) => {
+      tip.style.display = 'block';
+      tip.style.left = (ev.clientX + 14) + 'px';
+      tip.style.top  = (ev.clientY - 10) + 'px';
+      const arr = d.arr_eur ? fmtVal('arr_eur', String(d.arr_eur)) : null;
+      tip.innerHTML =
+        `<strong style="color:var(--text)">${esc(d.name)}</strong><br>
+         <span style="color:${nodeColor(d)}">${esc(d.sector || d.type)}</span><br>
+         ${arr ? `ARR: <span style="color:var(--green)">${esc(arr)}</span><br>` : ''}
+         ${d.conflict_count ? `<span style="color:var(--amber)">&#9888; ${d.conflict_count} conflict${d.conflict_count > 1 ? 's' : ''}</span><br>` : ''}
+         <span style="color:var(--muted)">${d.fact_count} facts &middot; click to brief</span>`;
+    })
+    .on('mouseleave', () => { tip.style.display = 'none'; })
+    .on('click', (ev, d) => {
+      ev.stopPropagation();
+      tip.style.display = 'none';
+      showView('search');
+      const inp = document.getElementById('company-search');
+      inp.value = d.name;
+      fetchEntity(d.name);
+    });
 
   svg.on('mouseleave', () => { tip.style.display = 'none'; });
 
-  // Force simulation with cluster attraction
+  // ── Update graph legend dynamically ──────────────────────────────────────
+  const legendEl = document.getElementById('graph-legend');
+  if (legendEl) {
+    legendEl.innerHTML = sectors.slice(0, 6).map(s =>
+      `<div class="legend-item">
+        <div class="legend-dot" style="background:${SECTOR_COLORS[s] || '#5e5a72'}"></div>
+        ${esc(s)}
+      </div>`
+    ).join('') +
+    `<div class="legend-item" style="margin-left:auto;gap:10px">
+      <span style="display:inline-flex;align-items:center;gap:4px">
+        <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#5e5a72" opacity="0.6"/></svg>
+        <span>Clean</span>
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:4px">
+        <svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="3 2"/><circle cx="10" cy="4" r="2.5" fill="#f59e0b"/></svg>
+        <span>Conflict</span>
+      </span>
+    </div>`;
+  }
+
+  // ── Force simulation ──────────────────────────────────────────────────────
   const sim = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(links).id(d => d.id).distance(50).strength(0.3))
-    .force('charge', d3.forceManyBody().strength(d => -20 - d.r * 2))
-    .force('collide', d3.forceCollide(d => d.r + 2).iterations(2))
+    .force('link', d3.forceLink(links).id(d => d.id)
+      .distance(d => d.ltype === 'bridge' ? 160 : 30)
+      .strength(d => d.ltype === 'bridge' ? 0.05 : 0.5))
+    .force('charge', d3.forceManyBody().strength(d => -18 - d.r * 2.5))
+    .force('collide', d3.forceCollide(d => d.r + 4).iterations(2))
     .force('cluster', () => {
       for (const d of nodes) {
         const cp = clusterPos[d._sector];
         if (!cp) continue;
-        d.vx += (cp.x - d.x) * 0.012;
-        d.vy += (cp.y - d.y) * 0.012;
+        d.vx += (cp.x - d.x) * 0.018;
+        d.vy += (cp.y - d.y) * 0.018;
       }
     })
     .on('tick', () => {
@@ -647,11 +733,13 @@ async function renderConflicts(filter) {
   }
 
   container.innerHTML = list.map(c => {
-    const id = c.conflict_id;
+    const id  = c.conflict_id;
+    const cid = esc(id);
+    const en  = esc(c.entity_name);
     if (resolved.has(id)) {
       return `<div class="conflict-item">
         <div class="conflict-header">
-          <span class="conflict-entity">${esc(c.entity_name)}</span>
+          <span class="conflict-entity" onclick="goToCompany('${en}')" title="View company brief">${en}</span>
           <span class="conflict-attr">${esc(fmtAttr(c.attribute))}</span>
           <span class="resolved-tag" style="margin-left:auto">resolved</span>
         </div>
@@ -662,25 +750,65 @@ async function renderConflicts(filter) {
     const vb    = esc(fmtVal(c.attribute, c.value_b));
     const sa    = esc(srcLabel(c.source_a));
     const sb    = esc(srcLabel(c.source_b));
-    const saId  = esc(id);
     return `<div class="conflict-item">
       <div class="conflict-header">
-        <span class="conflict-entity">${esc(c.entity_name)}</span>
+        <span class="conflict-entity" onclick="goToCompany('${en}')" title="View company brief">${en} ↗</span>
         <span class="conflict-attr">${esc(fmtAttr(c.attribute))}</span>
         ${delta ? `<span class="conflict-delta">Δ ${esc(delta)}</span>` : ''}
       </div>
       <div class="vs-row">
-        <div class="vs-box"><div class="vs-val">${va}</div><div class="vs-src">${sa}</div></div>
+        <div class="vs-box">
+          <div class="vs-val">${va}</div>
+          <div class="vs-src" style="display:flex;align-items:center;gap:6px">
+            ${sa}
+            <span class="src-link" onclick="goToSource('${en}','${esc(c.source_a || '')}')">view source ↗</span>
+          </div>
+        </div>
         <div class="vs-sep">vs</div>
-        <div class="vs-box"><div class="vs-val">${vb}</div><div class="vs-src">${sb}</div></div>
+        <div class="vs-box">
+          <div class="vs-val">${vb}</div>
+          <div class="vs-src" style="display:flex;align-items:center;gap:6px">
+            ${sb}
+            <span class="src-link" onclick="goToSource('${en}','${esc(c.source_b || '')}')">view source ↗</span>
+          </div>
+        </div>
       </div>
       <div class="action-row">
-        <button class="btn btn-a" onclick="resolve('${saId}')">Accept ${sa}</button>
-        <button class="btn btn-b" onclick="resolve('${saId}')">Accept ${sb}</button>
-        <button class="btn" onclick="resolve('${saId}')">Flag for founder</button>
+        <button class="btn btn-a" onclick="resolve('${cid}')">Accept ${sa}</button>
+        <button class="btn btn-b" onclick="resolve('${cid}')">Accept ${sb}</button>
+        <button class="btn" onclick="resolve('${cid}')">Flag for founder</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// Navigate to Company brief and pre-load the entity
+function goToCompany(entityName) {
+  showView('search');
+  const inp = document.getElementById('company-search');
+  inp.value = entityName;
+  fetchEntity(entityName);
+}
+
+// Navigate to Company brief filtered to a specific source type
+function goToSource(entityName, sourceType) {
+  showView('search');
+  const inp = document.getElementById('company-search');
+  inp.value = entityName;
+  // Fetch the entity and then highlight the matching source rows
+  fetchEntity(entityName).then(() => {
+    if (!sourceType) return;
+    // Briefly flash rows from this source so the user sees them
+    document.querySelectorAll('.src-pill').forEach(pill => {
+      if (pill.textContent.trim().toLowerCase() === sourceType.toLowerCase()) {
+        const row = pill.closest('tr');
+        if (!row) return;
+        row.style.transition = 'background .2s';
+        row.style.background = 'rgba(139,127,240,0.12)';
+        setTimeout(() => { row.style.background = ''; }, 1800);
+      }
+    });
+  }).catch(() => {});
 }
 
 async function resolve(id) {
