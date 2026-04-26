@@ -1147,23 +1147,29 @@ async function buildChatResponse(msg) {
   }
 
   // ── Company lookup — extract name from message ───────────────────────────
-  // Broad patterns: "about X", "tell me about X", "brief X", "search X",
-  // "look up X", "who is X", "what is X" — or just a plain company-like name.
+  // "on" removed as standalone keyword — too generic (matches "return on...", "focus on...", etc.)
   const namePatterns = [
-    /(?:about|on|brief(?:\s+me\s+on)?|tell\s+me\s+about|search(?:\s+for)?|look\s+up|who\s+is|what\s+(?:do\s+you\s+know\s+about|is))\s+(.+?)(?:\?|$)/i,
+    /(?:about|brief(?:\s+me\s+on)?|tell\s+me\s+about|search(?:\s+for)?|look\s+up|who\s+is|what\s+(?:do\s+you\s+know\s+about|is))\s+(.+?)(?:\?|$)/i,
     /^([A-Z][A-Za-z0-9 ,.\-&']+(?:PLC|LLC|GmbH|Ltd|Inc|Group|Corp|UG|AG|SRL|BV|GbR)?)[\?!.]?$/,
   ];
+
+  // Generic English phrases that are never company names
+  const _notACompany = /^(the |a |an |our |this |my |your |their |its |of |performance|return|portfolio|fund|market|sector|industry|growth|revenue|profit|loss|investment|strategy|analysis|report|update|summary|overview|status|progress|result)/i;
 
   let companyName = null;
   for (const pat of namePatterns) {
     const m = msg.trim().match(pat);
-    if (m) { companyName = m[1].trim().replace(/[?.!]$/, ''); break; }
+    if (m) {
+      const candidate = m[1].trim().replace(/[?.!]$/, '');
+      if (!_notACompany.test(candidate)) { companyName = candidate; break; }
+    }
   }
 
   // Also try: if the message is short (≤5 words) and starts with a capital, treat as a name
   if (!companyName) {
     const words = msg.trim().split(/\s+/);
-    if (words.length <= 5 && /^[A-Z]/.test(msg)) companyName = msg.trim().replace(/[?.!]$/, '');
+    if (words.length <= 5 && /^[A-Z]/.test(msg) && !_notACompany.test(msg.trim()))
+      companyName = msg.trim().replace(/[?.!]$/, '');
   }
 
   if (companyName) {
