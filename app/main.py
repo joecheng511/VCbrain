@@ -72,10 +72,10 @@ app.include_router(harness_router.router)
 
 @app.get("/brief/{name}", tags=["briefs"])
 async def generate_brief(name: str) -> dict:
-    """Generate a Claude investment brief for a named entity.
+    """Generate a Gemini investment brief for a named entity.
 
-    Requires ANTHROPIC_API_KEY in the environment.
-    Calls GET /entity/{name} internally via the harness, then Claude.
+    Requires GEMINI_API_KEY in the environment.
+    Calls GET /entity/{name} internally via the harness, then Gemini.
     """
     def _run() -> dict:
         from vcbrain_harness.harness import solve  # lazy: avoids import-time API key check

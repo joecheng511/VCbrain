@@ -319,9 +319,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
     <div class="chat-suggestions" id="sugg-bar">
       <span class="suggestion" onclick="sendSugg(this.textContent)">What do you know about Hogan PLC?</span>
       <span class="suggestion" onclick="sendSugg(this.textContent)">What conflicts need attention today?</span>
+      <span class="suggestion" onclick="sendSugg(this.textContent)">What is our healthcare industry exposure?</span>
+      <span class="suggestion" onclick="sendSugg(this.textContent)">Show portfolio sector breakdown</span>
       <span class="suggestion" onclick="sendSugg(this.textContent)">Tell me about Shah, Smith and Gilmore</span>
-      <span class="suggestion" onclick="sendSugg(this.textContent)">Brief me on Johnson-Roberts</span>
-      <span class="suggestion" onclick="sendSugg(this.textContent)">How has the harness improved?</span>
     </div>
     <div class="chat-messages" id="chat-messages">
       <div class="msg"><div class="msg-avatar av-ai">VC</div><div class="msg-bubble">Good morning. I'm VCbrain — Eastcoast Fund's memory. I know facts across <strong>400 companies</strong> loaded from your PostgreSQL database.<br><br>I'm checking for open conflicts now — ask me about any company by name, or open the Conflict queue to start reviewing.<br><br>Ask me anything about your deal flow.</div></div>
@@ -945,7 +945,7 @@ async function generateBrief(companyName) {
       ${redFlags}${qs}`;
   } catch (e) {
     const msg = e.status === 503
-      ? 'Set ANTHROPIC_API_KEY in your environment, then restart the server.'
+      ? 'Set GEMINI_API_KEY in your .env file, then restart the server.'
       : `Error: ${esc(e.message)}`;
     btn.textContent = 'Retry →';
     btn.disabled = false;
@@ -1118,45 +1118,131 @@ async function sendChat() {
 async function buildChatResponse(msg) {
   const l = msg.toLowerCase();
 
-  // Detect "what do you know about X" / "brief me on X" / "tell me about X"
-  const aboutMatch = msg.match(/(?:about|on|brief(?:me on)?|tell me about)\s+(.+?)(?:\?|$)/i);
-  if (aboutMatch || l.includes('conflict')) {
-    if (l.includes('conflict')) {
-      const conflicts = cachedConflicts.length ? cachedConflicts
-        : await apiFetch('/conflicts').catch(() => []);
-      const open = conflicts.filter(c => c.status === 'open').length;
-      const top3 = conflicts.filter(c => c.status === 'open').slice(0,3)
-        .map(c => `<span class="fact-tag">${esc(c.entity_name)} · ${esc(fmtAttr(c.attribute))}</span>`)
+  // ── Conflict questions ───────────────────────────────────────────────────
+  if (/conflict|dispute|mismatch|discrepan/i.test(msg) && !/about|tell|who|search|look/i.test(msg)) {
+    const conflicts = cachedConflicts.length ? cachedConflicts
+      : await apiFetch('/conflicts').catch(() => []);
+    const open = conflicts.filter(c => c.status === 'open' && !resolved.has(c.conflict_id));
+    const top3 = open.slice(0, 3)
+      .map(c => `<span class="fact-tag">${esc(c.entity_name)} · ${esc(fmtAttr(c.attribute))}</span>`)
+      .join(' ');
+    return `You have <strong style="color:var(--amber)">${open.length} open conflicts</strong> requiring review.<br><br>Top priorities: ${top3 || 'none'}<br><br>Open the Conflict queue to review and resolve each one.`;
+  }
+
+  // ── Harness / evolution questions ────────────────────────────────────────
+  if (/harness|evolut|smarter|improv|train/i.test(msg)) {
+    return `The harness evolution loop is built into VCbrain. Open the <strong>Harness evolution</strong> panel and click <span class="fact-tag">Run evolution</span> to start improving the analyst prompt. It runs ${5} iterations by default and saves the best-scoring prompt automatically.`;
+  }
+
+  // ── Company lookup — extract name from message ───────────────────────────
+  // Broad patterns: "about X", "tell me about X", "brief X", "search X",
+  // "look up X", "who is X", "what is X" — or just a plain company-like name.
+  const namePatterns = [
+    /(?:about|on|brief(?:\s+me\s+on)?|tell\s+me\s+about|search(?:\s+for)?|look\s+up|who\s+is|what\s+(?:do\s+you\s+know\s+about|is))\s+(.+?)(?:\?|$)/i,
+    /^([A-Z][A-Za-z0-9 ,.\-&']+(?:PLC|LLC|GmbH|Ltd|Inc|Group|Corp|UG|AG|SRL|BV|GbR)?)[\?!.]?$/,
+  ];
+
+  let companyName = null;
+  for (const pat of namePatterns) {
+    const m = msg.trim().match(pat);
+    if (m) { companyName = m[1].trim().replace(/[?.!]$/, ''); break; }
+  }
+
+  // Also try: if the message is short (≤5 words) and starts with a capital, treat as a name
+  if (!companyName) {
+    const words = msg.trim().split(/\s+/);
+    if (words.length <= 5 && /^[A-Z]/.test(msg)) companyName = msg.trim().replace(/[?.!]$/, '');
+  }
+
+  if (companyName) {
+    try {
+      const data = await apiFetch('/entity/' + encodeURIComponent(companyName));
+      const facts     = data.facts    || [];
+      const conflicts = data.conflicts || [];
+      const factMap   = {};
+      facts.forEach(f => { if (!factMap[f.attribute]) factMap[f.attribute] = f; });
+      const tags = ['arr_eur','mrr_eur','sector','stage','deal_status']
+        .filter(k => factMap[k])
+        .map(k => `<span class="fact-tag">${esc(fmtAttr(k))}: ${esc(fmtVal(k, factMap[k].value))}</span>`)
         .join(' ');
-      return `You have <strong style="color:var(--amber)">${open} open conflicts</strong> requiring review.<br><br>Top priorities: ${top3 || 'none'}<br><br>Open the Conflict queue to review and resolve each one.`;
-    }
-    if (aboutMatch) {
-      const companyName = aboutMatch[1].trim();
-      try {
-        const data = await apiFetch('/entity/' + encodeURIComponent(companyName));
-        const facts = data.facts || [];
-        const conflicts = data.conflicts || [];
-        const factMap = {};
-        facts.forEach(f => { if (!factMap[f.attribute]) factMap[f.attribute] = f; });
-        const tags = ['arr_eur','mrr_eur','sector','stage','deal_status']
-          .filter(k => factMap[k])
-          .map(k => `<span class="fact-tag">${esc(fmtAttr(k))}: ${esc(fmtVal(k, factMap[k].value))}</span>`)
-          .join(' ');
-        const conflictNote = conflicts.length
-          ? `<br><br><strong style="color:var(--amber)">&#9888; ${conflicts.length} open conflict${conflicts.length>1?'s':''}</strong> on this entity — check the Conflict queue.`
-          : '<br><br>No conflicts detected.';
-        return `<strong>${esc(data.entity.name)}</strong><br><br>${tags}${conflictNote}<br><br>Open "Company brief" and search for this company to see all ${facts.length} facts with full provenance.`;
-      } catch (e) {
-        if (e.status === 404)
-          return `I don't have <strong>${esc(aboutMatch[1])}</strong> in the fact graph. Try searching by exact name in Company brief.`;
-      }
+      const conflictNote = conflicts.length
+        ? `<br><br><strong style="color:var(--amber)">&#9888; ${conflicts.length} open conflict${conflicts.length > 1 ? 's' : ''}</strong> — check the Conflict queue.`
+        : '<br><br>No conflicts detected.';
+      return `<strong>${esc(data.entity.name)}</strong><br><br>${tags || '<span style="color:var(--muted)">No key facts on record.</span>'}${conflictNote}<br><br><span style="color:var(--muted)">${facts.length} facts · <span class="src-link" onclick="goToCompany('${esc(data.entity.name)}')">View full brief ↗</span></span>`;
+    } catch (e) {
+      if (e.status === 404)
+        return `I don't have <strong>${esc(companyName)}</strong> in the fact graph. Try the exact name — e.g. <em>"Hogan PLC"</em> or <em>"Shah, Smith and Gilmore"</em>.`;
+      return `Couldn't reach the backend right now. Make sure the server is running on port 8000.`;
     }
   }
 
-  if (l.includes('harness') || l.includes('evolut') || l.includes('smarter'))
-    return `The harness evolution loop is set up and ready. Run <span class="fact-tag">ph run --max-iterations 5</span> to start the first cycle. The harness score will improve as VCbrain learns from evaluation feedback.`;
+  // ── Sector / portfolio exposure questions ────────────────────────────────
+  if (/sector|industry|exposure|portfolio|breakdown|space|vertical|healthcare|fintech|saas|b2b|enterprise|consumer|deep.?tech|climate|edtech|proptech/i.test(msg)) {
+    try {
+      const sectors = await apiFetch('/entities/by-sector');
+      const sectorKeywords = [
+        ['Healthcare', /health/i],
+        ['Fintech',    /fintech|financ/i],
+        ['SaaS',       /\bsaas\b/i],
+        ['B2B',        /\bb2b\b/i],
+        ['Enterprise', /enterprise/i],
+        ['Consumer',   /consumer/i],
+        ['Climate',    /climate|green|sustain/i],
+        ['EdTech',     /edtech|educat/i],
+        ['PropTech',   /proptech|real.?estate/i],
+        ['Deep Tech',  /deep.?tech/i],
+      ];
+      let highlight = null;
+      for (const [name, pat] of sectorKeywords) {
+        if (pat.test(msg)) { highlight = name; break; }
+      }
+      if (!highlight) {
+        for (const s of sectors) {
+          if (msg.toLowerCase().includes(s.sector.toLowerCase()) && s.sector !== 'Unknown') {
+            highlight = s.sector; break;
+          }
+        }
+      }
+      const totalCos = sectors.reduce((s, r) => s + r.company_count, 0);
+      const totalArr = sectors.reduce((s, r) => s + r.total_arr_m, 0);
+      if (highlight) {
+        const row = sectors.find(s => s.sector.toLowerCase().includes(highlight.toLowerCase()));
+        if (row) {
+          const pct = ((row.company_count / totalCos) * 100).toFixed(1);
+          const arrStr = row.total_arr_m > 0 ? ` — <strong>€${row.total_arr_m.toFixed(1)}M ARR</strong>` : '';
+          const conflictStr = row.open_conflicts > 0
+            ? ` · <strong style="color:var(--amber)">${row.open_conflicts} open conflict${row.open_conflicts > 1 ? 's' : ''}</strong>` : '';
+          return `<strong>${esc(row.sector)}</strong>: <strong>${row.company_count} companies</strong> (${pct}% of portfolio)${arrStr}${conflictStr}.`;
+        }
+        return `No companies tagged with <strong>${esc(highlight)}</strong> in the fact graph yet. Sectors present: ${sectors.slice(0,5).map(s => `<span class="fact-tag">${esc(s.sector)}</span>`).join(' ')}.`;
+      }
+      const rows = sectors.slice(0, 12).map(s => {
+        const pct  = totalCos > 0 ? ((s.company_count / totalCos) * 100).toFixed(0) : 0;
+        const bar  = '▓'.repeat(Math.max(1, Math.round(s.company_count / totalCos * 20)));
+        const arrStr = s.total_arr_m > 0 ? ` · €${s.total_arr_m.toFixed(1)}M ARR` : '';
+        const flagStr = s.open_conflicts > 0 ? ` · <span style="color:var(--amber)">⚠ ${s.open_conflicts}</span>` : '';
+        return `<div style="margin:4px 0;font-size:12px"><span style="display:inline-block;width:120px;font-family:var(--mono)">${esc(s.sector)}</span> <span style="color:var(--purple2)">${bar}</span> <span style="color:var(--muted)">${s.company_count} cos · ${pct}%${arrStr}${flagStr}</span></div>`;
+      }).join('');
+      return `Portfolio: <strong>${totalCos} companies</strong> · <strong>€${totalArr.toFixed(1)}M total ARR</strong><br><br>${rows}`;
+    } catch (_) {}
+  }
 
-  return `I can look up any company in the fact graph. Try: <em>"What do you know about Hogan PLC?"</em> or <em>"What conflicts need attention?"</em>`;
+  // ── Stats questions ───────────────────────────────────────────────────────
+  if (/how many|count|total|stat/i.test(msg)) {
+    try {
+      const c = await apiFetch('/entities/count');
+      const open = cachedConflicts.filter(x => x.status === 'open').length;
+      return `VCbrain currently tracks <strong>${c.count.toLocaleString()} companies</strong> with <strong>${c.fact_count.toLocaleString()} facts</strong> and <strong style="color:var(--amber)">${open} open conflicts</strong>.`;
+    } catch (_) {}
+  }
+
+  // ── Fallback ─────────────────────────────────────────────────────────────
+  return `I can look up any company in the fact graph. Try:<br><br>
+    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('What do you know about Hogan PLC?')">What do you know about Hogan PLC?</span>
+    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('Shah, Smith and Gilmore')">Shah, Smith and Gilmore</span>
+    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('What conflicts need attention?')">What conflicts need attention?</span>
+    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('What is our healthcare exposure?')">What is our healthcare exposure?</span>
+    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('Show portfolio sector breakdown')">Sector breakdown</span>`;
 }
 
 function appendMsg(text, role) {

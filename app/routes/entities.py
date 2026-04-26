@@ -242,3 +242,50 @@ def count_entities() -> dict[str, int]:
         cur.execute("SELECT COUNT(*) AS n FROM facts")
         facts_n = int(cur.fetchone()["n"])
     return {"count": entities_n, "fact_count": facts_n}
+
+
+@router.get("/entities/by-sector", tags=["entities"])
+def entities_by_sector() -> list[dict]:
+    """Return company count, total ARR and open conflicts grouped by sector."""
+    with get_dict_cursor() as cur:
+        cur.execute("""
+            WITH sector_facts AS (
+                SELECT
+                    f.entity_id,
+                    MAX(CASE WHEN f.attribute = 'sector'  THEN f.value END) AS sector,
+                    MAX(CASE WHEN f.attribute = 'arr_eur' THEN f.value::numeric END) AS arr_eur
+                FROM facts f
+                GROUP BY f.entity_id
+            ),
+            conflict_counts AS (
+                SELECT entity_id, COUNT(DISTINCT c.id) AS open_conflicts
+                FROM (
+                    SELECT f.entity_id, c.id
+                    FROM conflicts c JOIN facts f ON c.fact_a_id = f.id WHERE c.status = 'open'
+                    UNION ALL
+                    SELECT f.entity_id, c.id
+                    FROM conflicts c JOIN facts f ON c.fact_b_id = f.id WHERE c.status = 'open'
+                ) sides
+                GROUP BY entity_id
+            )
+            SELECT
+                COALESCE(sf.sector, 'Unknown')       AS sector,
+                COUNT(DISTINCT e.id)                 AS company_count,
+                ROUND(SUM(sf.arr_eur) / 1e6, 2)     AS total_arr_m,
+                COALESCE(SUM(cc.open_conflicts), 0)  AS open_conflicts
+            FROM entities e
+            LEFT JOIN sector_facts    sf ON sf.entity_id = e.id
+            LEFT JOIN conflict_counts cc ON cc.entity_id = e.id
+            GROUP BY COALESCE(sf.sector, 'Unknown')
+            ORDER BY company_count DESC
+        """)
+        rows = cur.fetchall()
+    return [
+        {
+            "sector":         r["sector"],
+            "company_count":  int(r["company_count"]),
+            "total_arr_m":    float(r["total_arr_m"]) if r["total_arr_m"] is not None else 0.0,
+            "open_conflicts": int(r["open_conflicts"]),
+        }
+        for r in rows
+    ]

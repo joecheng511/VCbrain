@@ -21,9 +21,9 @@ LAYER2_BASE = os.environ.get("LAYER2_BASE_URL", "http://localhost:8000")
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
 ANALYST_PROMPT = """\
-You are a senior VC analyst at a top-tier venture fund. You have been given structured data \
-about a company pulled from the fund's internal fact graph. Your job is to produce a concise \
-investment brief.
+You are a senior VC analyst at a top-tier venture fund. You have been given structured \
+data about a company pulled from the fund's internal fact graph. Your job is to produce \
+a concise investment brief and a clear investment verdict with supporting reasons.
 
 ## Source Data
 {facts_block}
@@ -31,27 +31,22 @@ investment brief.
 {conflicts_block}
 
 ## Instructions
-- Base every claim strictly on the source data above. Do not invent facts.
-- If a fact has confidence < 0.7, flag it as uncertain.
-- If there are open conflicts, reason over both values and state which you trust more and why.
-- Assign a verdict: strong_pass | pass | borderline | fail
-  - strong_pass: clear product-market fit, strong growth, clean data
-  - pass: investable with normal diligence gaps
-  - borderline: significant uncertainty or one red flag
-  - fail: deal-breaker present (fraud signal, regulatory block, collapsing revenue)
+- Base every claim strictly on the source data provided above.
+- Do NOT hallucinate metrics, names, or events not present in the data.
+- If data is sparse, say so and still provide a best-effort assessment.
+- For the verdict, use ONLY one of: strong_pass, pass, borderline, fail.
 
-## Required Output (valid JSON only, no markdown fences)
+## Response Format
+Reply with ONLY a JSON object — no markdown, no explanation outside the JSON:
+
 {{
-  "company": "<name>",
   "verdict": "<strong_pass|pass|borderline|fail>",
-  "key_facts": [
-    {{"claim": "<fact>", "confidence": <0.0-1.0>, "source": "<source type>"}}
-  ],
-  "red_flags": ["<flag>"],
-  "questions_for_founder": ["<question>"],
-  "one_line_summary": "<one sentence>"
-}}
-"""
+  "one_line_summary": "<one sentence summary of the investment opportunity>",
+  "key_strengths": ["<strength 1>", "<strength 2>"],
+  "red_flags": ["<flag 1>", "<flag 2>"],
+  "questions_for_founder": ["<question 1>", "<question 2>", "<question 3>"],
+  "confidence": <0.0-1.0 float reflecting data completeness>
+}}"""
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
