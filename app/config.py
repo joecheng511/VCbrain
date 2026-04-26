@@ -19,6 +19,12 @@ class Settings:
     cors_origins: list[str]
     harness_auto_run: bool
     harness_max_iterations: int
+    pioneer_api_key: str
+    compact_context: bool
+    compact_threshold: float
+    compact_max_facts: int
+    training_batch_threshold: int
+    auto_train: bool
 
 
 def load_settings() -> Settings:
@@ -40,6 +46,13 @@ def load_settings() -> Settings:
         # Set HARNESS_AUTO_RUN=true to start evolution automatically on server boot.
         harness_auto_run=os.getenv("HARNESS_AUTO_RUN", "false").lower() == "true",
         harness_max_iterations=int(os.getenv("HARNESS_MAX_ITERATIONS", "5")),
+        # GLiNER2 / Pioneer.ai context-compaction settings.
+        pioneer_api_key=os.getenv("PIONEER_API_KEY", ""),
+        compact_context=os.getenv("COMPACT_CONTEXT", "true").lower() == "true",
+        compact_threshold=float(os.getenv("COMPACT_THRESHOLD", "0.4")),
+        compact_max_facts=int(os.getenv("COMPACT_MAX_FACTS", "30")),
+        training_batch_threshold=int(os.getenv("TRAINING_BATCH_THRESHOLD", "50")),
+        auto_train=os.getenv("AUTO_TRAIN", "false").lower() == "true",
     )
 
 

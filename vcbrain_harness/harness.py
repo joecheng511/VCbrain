@@ -10,6 +10,7 @@ solve(company_name) -> JSON string:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import urllib.error
 import urllib.parse
@@ -17,8 +18,15 @@ import urllib.request
 
 from google import genai
 
+logger = logging.getLogger(__name__)
+
 LAYER2_BASE = os.environ.get("LAYER2_BASE_URL", "http://localhost:8000")
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+
+
+def _compact_enabled() -> bool:
+    return os.environ.get("COMPACT_CONTEXT", "true").lower() in ("1", "true", "yes")
+
 
 _BASE_PROMPT = """\
 You are a senior VC analyst at a top-tier venture fund. You have been given structured \
@@ -93,7 +101,6 @@ def _fetch_conflicts(company_name: str) -> list[dict]:
         result = _get_json(url)
         return result if isinstance(result, list) else []
     except Exception:
-        # /conflicts is an enhancement; fall back gracefully if endpoint unreachable
         return []
 
 
@@ -158,11 +165,27 @@ def solve(input_data: str) -> str:
     entity_data = _fetch_entity(company_name)
     api_conflicts = _fetch_conflicts(company_name)
 
-    facts_block = _build_facts_block(entity_data)
-    conflicts_block = _build_conflicts_block(
-        entity_data.get("conflicts", []),
-        api_conflicts,
-    )
+    raw_facts = list(entity_data.get("facts", []))
+    raw_conflicts = list(api_conflicts)
+
+    compact_summary: str | None = None
+    if _compact_enabled():
+        try:
+            from vcbrain_harness.compactor import compact_context
+
+            compact_summary = compact_context(entity_data, raw_conflicts)
+        except Exception as exc:
+            logger.warning("Context compaction failed (%s); falling back to raw facts", exc)
+
+    if compact_summary:
+        facts_block = compact_summary
+        conflicts_block = ""
+    else:
+        facts_block = _build_facts_block(entity_data)
+        conflicts_block = _build_conflicts_block(
+            entity_data.get("conflicts", []),
+            raw_conflicts,
+        )
 
     # Reload each call so an evolved prompt from evolution_state.json is picked up
     # without requiring a server restart.
@@ -187,4 +210,14 @@ def solve(input_data: str) -> str:
         raw = raw.strip()
 
     brief = json.loads(raw)
+
+    if _compact_enabled():
+        try:
+            from vcbrain_harness.trainer import log_training_example, maybe_run_training
+
+            log_training_example(raw_facts, brief, company_name)
+            maybe_run_training()
+        except Exception as exc:
+            logger.warning("Training feedback failed (%s); ignoring", exc)
+
     return json.dumps(brief)
