@@ -9,10 +9,11 @@ How it works
      - 0.40 pts  — verdict matches expected
      - 0.40 pts  — fraction of must_mention keywords found in the output
      - 0.20 pts  — fraction of must_not_hallucinate keywords NOT found
-4. Send failures to Claude asking it to rewrite ANALYST_PROMPT
-5. Replace ANALYST_PROMPT in harness.py with the improved version
+4. Send failures to Gemini asking it to rewrite the analyst prompt
+5. Validate the new prompt and keep it in memory for the next iteration
 6. Repeat for max_iterations; always keep the best-scoring prompt
-7. Persist state to vcbrain_tasks/evolution_state.json after each iteration
+7. Persist best prompt + state to vcbrain_tasks/evolution_state.json after each iteration
+   (harness.py loads the saved prompt on startup — never written directly)
 
 Usage
 -----
@@ -25,7 +26,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 import threading
 import time
 from dataclasses import asdict, dataclass, field
@@ -38,7 +38,6 @@ from google.genai import types as genai_types
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 _ROOT        = Path(__file__).parent.parent
-_HARNESS_PY  = Path(__file__).parent / "harness.py"
 _TEST_CASES  = _ROOT / "vcbrain_tasks" / "test_cases.json"
 _STATE_FILE  = _ROOT / "vcbrain_tasks" / "evolution_state.json"
 
@@ -156,37 +155,12 @@ def score_result(brief: dict, expected: dict) -> tuple[float, list[str]]:
     return round(total, 4), failures
 
 
-# ── Prompt extraction / injection ─────────────────────────────────────────────
-
-_PROMPT_START = 'ANALYST_PROMPT = """\\'
-_PROMPT_END   = '"""'
-
-
 def _read_current_prompt() -> str:
-    """Extract ANALYST_PROMPT value from harness.py."""
-    src = _HARNESS_PY.read_text(encoding="utf-8")
-    m = re.search(
-        r'ANALYST_PROMPT\s*=\s*"""\\\n(.*?)"""',
-        src,
-        re.DOTALL,
-    )
-    if not m:
-        raise ValueError("Could not find ANALYST_PROMPT in harness.py")
-    return m.group(1)
+    """Return the current best prompt from the harness module."""
+    from vcbrain_harness.harness import _load_prompt  # avoid circular at module level
+    return _load_prompt()
 
 
-def _write_prompt(new_prompt: str) -> None:
-    """Overwrite ANALYST_PROMPT in harness.py with new_prompt."""
-    src = _HARNESS_PY.read_text(encoding="utf-8")
-    # Escape backslashes and braces that would confuse the replacement
-    replacement = f'ANALYST_PROMPT = """\\\n{new_prompt}"""'
-    new_src = re.sub(
-        r'ANALYST_PROMPT\s*=\s*"""\\\n.*?"""',
-        replacement,
-        src,
-        flags=re.DOTALL,
-    )
-    _HARNESS_PY.write_text(new_src, encoding="utf-8")
 
 
 # ── Claude prompt-improvement call ────────────────────────────────────────────
@@ -394,21 +368,17 @@ def run_evolution(max_iterations: int = 5) -> None:
                         _state.status = "stopped"
                 break
 
-            # Ask Claude to improve the prompt for the next iteration
+            # Ask Gemini to improve the prompt for the next iteration
             if result.failures and i < max_iterations - 1:
                 try:
                     improved = _improve_prompt(current_prompt, result.failures, client)
                     # Validate it still contains the required placeholders
                     if "{facts_block}" in improved and "{conflicts_block}" in improved:
                         current_prompt = improved
-                        _write_prompt(improved)
                 except Exception as exc:
                     # If improvement fails, keep current prompt and continue
                     with _lock:
                         _state.iterations[-1].summary += f" (improve failed: {exc})"
-
-        # Ensure best prompt is written to harness.py
-        _write_prompt(best_prompt)
 
         with _lock:
             if _state.status != "stopped":

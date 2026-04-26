@@ -20,7 +20,7 @@ from google import genai
 LAYER2_BASE = os.environ.get("LAYER2_BASE_URL", "http://localhost:8000")
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
-ANALYST_PROMPT = """\
+_BASE_PROMPT = """\
 You are a senior VC analyst at a top-tier venture fund. You have been given structured \
 data about a company pulled from the fund's internal fact graph. Your job is to produce \
 a concise investment brief and a clear investment verdict with supporting reasons.
@@ -47,6 +47,25 @@ Reply with ONLY a JSON object — no markdown, no explanation outside the JSON:
   "questions_for_founder": ["<question 1>", "<question 2>", "<question 3>"],
   "confidence": <0.0-1.0 float reflecting data completeness>
 }}"""
+
+
+def _load_prompt() -> str:
+    """Return the evolved prompt if saved, otherwise the base prompt."""
+    try:
+        import pathlib, json as _json
+        state_file = pathlib.Path(__file__).parent.parent / "vcbrain_tasks" / "evolution_state.json"
+        if state_file.exists():
+            state = _json.loads(state_file.read_text(encoding="utf-8"))
+            evolved = state.get("best_prompt", "").strip()
+            # Only use evolved prompt if it still contains the required placeholders
+            if evolved and "{facts_block}" in evolved and "{conflicts_block}" in evolved:
+                return evolved
+    except Exception:
+        pass
+    return _BASE_PROMPT
+
+
+ANALYST_PROMPT = _load_prompt()
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
