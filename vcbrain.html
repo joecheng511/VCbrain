@@ -1079,7 +1079,19 @@ async function startHarness() {
   const btn = document.getElementById('harness-run-btn');
   btn.disabled = true; btn.textContent = 'Starting…';
   try {
-    await fetch(API + '/harness/run?max_iterations=5', { method: 'POST' });
+    const res = await fetch(API + '/harness/run?max_iterations=5', { method: 'POST' });
+    if (res.status === 409) {
+      // Already running — just refresh the status panel, no error
+      renderHarness();
+      return;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      document.getElementById('harness-status-text').textContent =
+        'Error: ' + (body.detail || res.statusText);
+      btn.disabled = false; btn.textContent = 'Run evolution';
+      return;
+    }
     renderHarness();
   } catch (_) {
     btn.disabled = false; btn.textContent = 'Run evolution';
