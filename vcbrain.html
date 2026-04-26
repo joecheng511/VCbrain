@@ -320,8 +320,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
       <span class="suggestion" onclick="sendSugg(this.textContent)">What do you know about Hogan PLC?</span>
       <span class="suggestion" onclick="sendSugg(this.textContent)">What conflicts need attention today?</span>
       <span class="suggestion" onclick="sendSugg(this.textContent)">What is our healthcare industry exposure?</span>
-      <span class="suggestion" onclick="sendSugg(this.textContent)">Show portfolio sector breakdown</span>
-      <span class="suggestion" onclick="sendSugg(this.textContent)">Tell me about Shah, Smith and Gilmore</span>
+      <span class="suggestion" onclick="sendSugg(this.textContent)">Compare Hogan PLC and Parker Group</span>
+      <span class="suggestion" onclick="sendSugg(this.textContent)">Brief me on Shah, Smith and Gilmore</span>
     </div>
     <div class="chat-messages" id="chat-messages">
       <div class="msg"><div class="msg-avatar av-ai">VC</div><div class="msg-bubble">Good morning. I'm VCbrain — Eastcoast Fund's memory. I know facts across <strong>400 companies</strong> loaded from your PostgreSQL database.<br><br>I'm checking for open conflicts now — ask me about any company by name, or open the Conflict queue to start reviewing.<br><br>Ask me anything about your deal flow.</div></div>
@@ -1128,114 +1128,15 @@ async function sendChat() {
 }
 
 async function buildChatResponse(msg) {
-  // All intent detection is now handled by Gemini on the backend.
-  // POST /chat classifies the message and returns structured data.
+  // POST /chat: Gemini classifies intent, fetches enriched data, synthesizes response.
+  // Backend always returns data.text (HTML string ready to render).
   const data = await fetch(API + '/chat', {
-    method: 'POST',
+    method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: msg }),
+    body:    JSON.stringify({ message: msg }),
   }).then(r => r.json());
 
-  return renderIntent(data, msg);
-}
-
-function renderIntent(d, originalMsg) {
-  const intent = d.intent;
-
-  // ── Company facts ─────────────────────────────────────────────────────────
-  if (intent === 'company') {
-    const e      = d.entity || {};
-    const facts  = d.facts  || [];
-    const factMap = {};
-    facts.forEach(f => { if (!factMap[f.attribute]) factMap[f.attribute] = f; });
-    const tags = ['arr_eur','mrr_eur','sector','stage','deal_status']
-      .filter(k => factMap[k])
-      .map(k => `<span class="fact-tag">${esc(fmtAttr(k))}: ${esc(fmtVal(k, factMap[k].value))}</span>`)
-      .join(' ');
-    const conflictNote = d.conflict_count > 0
-      ? `<br><br><strong style="color:var(--amber)">&#9888; ${d.conflict_count} open conflict${d.conflict_count > 1 ? 's' : ''}</strong> — check the Conflict queue.`
-      : '<br><br>No conflicts detected.';
-    return `<strong>${esc(e.name)}</strong><br><br>${tags || '<span style="color:var(--muted)">No key facts on record.</span>'}${conflictNote}<br><br><span style="color:var(--muted)">${facts.length} facts · <span class="src-link" onclick="goToCompany('${esc(e.name)}')">View full brief ↗</span></span>`;
-  }
-
-  // ── Investment brief ──────────────────────────────────────────────────────
-  if (intent === 'brief') {
-    const verdictColor = {strong_pass:'var(--green)',pass:'var(--green)',borderline:'var(--amber)',fail:'var(--red)'};
-    const col = verdictColor[d.verdict] || 'var(--muted2)';
-    const redFlags = (d.red_flags || []).length
-      ? `<div style="margin-top:6px;color:var(--red)">Red flags: ${(d.red_flags||[]).map(esc).join(' · ')}</div>` : '';
-    const qs = (d.questions_for_founder || []).slice(0,2).length
-      ? `<div style="margin-top:6px;color:var(--muted2)">Questions: ${(d.questions_for_founder||[]).slice(0,2).map(esc).join(' · ')}</div>` : '';
-    return `<strong>${esc(d.entity_name)}</strong>
-      <div style="margin:6px 0"><span style="font-family:var(--mono);font-size:10px;color:${col};letter-spacing:.08em">${(d.verdict||'').replace(/_/g,' ').toUpperCase()}</span></div>
-      ${esc(d.one_line_summary || '')}${redFlags}${qs}`;
-  }
-
-  // ── Sector breakdown ──────────────────────────────────────────────────────
-  if (intent === 'sector') {
-    const sectors = d.sectors || [];
-    const filter  = d.filter;
-    const totalCos = sectors.reduce((s, r) => s + r.company_count, 0);
-    const totalArr = sectors.reduce((s, r) => s + r.total_arr_m, 0);
-    if (filter) {
-      const row = sectors.find(s => s.sector.toLowerCase().includes(filter.toLowerCase()));
-      if (row) {
-        const pct = ((row.company_count / totalCos) * 100).toFixed(1);
-        const arrStr = row.total_arr_m > 0 ? ` — <strong>€${row.total_arr_m.toFixed(1)}M ARR</strong>` : '';
-        const conflictStr = row.open_conflicts > 0
-          ? ` · <strong style="color:var(--amber)">${row.open_conflicts} open conflict${row.open_conflicts > 1 ? 's' : ''}</strong>` : '';
-        return `<strong>${esc(row.sector)}</strong>: <strong>${row.company_count} companies</strong> (${pct}% of portfolio)${arrStr}${conflictStr}.`;
-      }
-      return `No companies tagged as <strong>${esc(filter)}</strong> yet. Sectors: ${sectors.slice(0,5).map(s=>`<span class="fact-tag">${esc(s.sector)}</span>`).join(' ')}.`;
-    }
-    const rows = sectors.slice(0,12).map(s => {
-      const pct = totalCos > 0 ? ((s.company_count/totalCos)*100).toFixed(0) : 0;
-      const bar = '▓'.repeat(Math.max(1, Math.round(s.company_count/totalCos*20)));
-      const arrStr = s.total_arr_m > 0 ? ` · €${s.total_arr_m.toFixed(1)}M ARR` : '';
-      const flagStr = s.open_conflicts > 0 ? ` · <span style="color:var(--amber)">⚠ ${s.open_conflicts}</span>` : '';
-      return `<div style="margin:4px 0;font-size:12px"><span style="display:inline-block;width:120px;font-family:var(--mono)">${esc(s.sector)}</span> <span style="color:var(--purple2)">${bar}</span> <span style="color:var(--muted)">${s.company_count} cos · ${pct}%${arrStr}${flagStr}</span></div>`;
-    }).join('');
-    return `Portfolio: <strong>${totalCos} companies</strong> · <strong>€${totalArr.toFixed(1)}M total ARR</strong><br><br>${rows}`;
-  }
-
-  // ── Conflict queue ────────────────────────────────────────────────────────
-  if (intent === 'conflicts') {
-    const open = d.open_count || 0;
-    const top3 = (d.conflicts||[]).slice(0,3)
-      .map(c => `<span class="fact-tag">${esc(c.entity_name)} · ${esc(fmtAttr(c.attribute))}</span>`)
-      .join(' ');
-    return `You have <strong style="color:var(--amber)">${open} open conflicts</strong> requiring review.<br><br>Top priorities: ${top3||'none'}<br><br>Open the Conflict queue to review and resolve each one.`;
-  }
-
-  // ── Harness status ────────────────────────────────────────────────────────
-  if (intent === 'harness') {
-    const pct = d.best_score > 0 ? `<strong style="color:var(--green)">${(d.best_score*100).toFixed(0)}%</strong> best score` : 'not yet scored';
-    const statusColor = {running:'var(--green)',done:'var(--purple2)',stopped:'var(--amber)',error:'var(--red)',idle:'var(--muted)'}[d.status]||'var(--muted)';
-    return `Harness evolution is <strong style="color:${statusColor}">${esc(d.status)}</strong> · ${pct} · ${d.iterations} of ${d.max_iterations} iterations complete.<br><br>Open the <strong>Harness evolution</strong> panel to run or monitor.`;
-  }
-
-  // ── Portfolio stats ───────────────────────────────────────────────────────
-  if (intent === 'stats') {
-    return `VCbrain tracks <strong>${(d.entity_count||0).toLocaleString()} companies</strong> with <strong>${(d.fact_count||0).toLocaleString()} facts</strong> and <strong style="color:var(--amber)">${d.open_conflicts||0} open conflicts</strong>.`;
-  }
-
-  // ── Company not found ─────────────────────────────────────────────────────
-  if (intent === 'not_found') {
-    return `I don't have <strong>${esc(d.queried||originalMsg)}</strong> in the fact graph. Try the exact company name — e.g. <em>"Hogan PLC"</em>.`;
-  }
-
-  // ── Error from backend ────────────────────────────────────────────────────
-  if (intent === 'error') {
-    return `Something went wrong: ${esc(d.message||'unknown error')}. Make sure GEMINI_API_KEY is set.`;
-  }
-
-  // ── Unknown / fallback ────────────────────────────────────────────────────
-  return `I can answer questions about companies, sector exposure, conflicts, and harness evolution. Try:<br><br>
-    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('What do you know about Hogan PLC?')">Hogan PLC</span>
-    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('What is our healthcare exposure?')">Healthcare exposure</span>
-    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('What conflicts need attention?')">Conflicts</span>
-    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('Brief me on Shah, Smith and Gilmore')">Brief: Shah, Smith and Gilmore</span>
-    <span class="fact-tag" style="cursor:pointer" onclick="sendSugg('How many companies are tracked?')">Portfolio stats</span>`;
+  return data.text || 'No response from backend.';
 }
 
 function appendMsg(text, role) {
