@@ -4,7 +4,7 @@ VCbrain Layer 3 harness — v1.
 solve(company_name) -> JSON string:
   1. Fetches entity facts from GET /entity/{name}   (Layer 2)
   2. Fetches open conflicts from GET /conflicts?entity={name}  (Layer 2)
-  3. Sends merged context to Claude, returns a structured VC investment brief.
+  3. Sends merged context to Gemini, returns a structured VC investment brief.
 """
 
 from __future__ import annotations
@@ -63,9 +63,6 @@ def _load_prompt() -> str:
     except Exception:
         pass
     return _BASE_PROMPT
-
-
-ANALYST_PROMPT = _load_prompt()
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -166,7 +163,9 @@ def solve(input_data: str) -> str:
         api_conflicts,
     )
 
-    prompt = ANALYST_PROMPT.format(
+    # Reload each call so an evolved prompt from evolution_state.json is picked up
+    # without requiring a server restart.
+    prompt = _load_prompt().format(
         facts_block=facts_block,
         conflicts_block=conflicts_block,
     )

@@ -45,6 +45,8 @@ _CONFLICTS_SQL = """
     FROM conflicts c
     JOIN facts f1 ON c.fact_a_id = f1.id
     JOIN facts f2 ON c.fact_b_id = f2.id
+    -- Intentional: OR covers both sides so a conflict between entity A (fact_a)
+    -- and entity B (fact_b) appears in both A's and B's detail views.
     WHERE f1.entity_id = %(eid)s OR f2.entity_id = %(eid)s
     ORDER BY c.created_at DESC
 """
@@ -235,13 +237,15 @@ def resolve_conflict(
 
 @router.get("/entities/count", tags=["entities"])
 def count_entities() -> dict[str, int]:
-    """Return total entity count and fact count."""
+    """Return total entity count and fact count (single atomic query)."""
     with get_dict_cursor() as cur:
-        cur.execute("SELECT COUNT(*) AS n FROM entities")
-        entities_n = int(cur.fetchone()["n"])
-        cur.execute("SELECT COUNT(*) AS n FROM facts")
-        facts_n = int(cur.fetchone()["n"])
-    return {"count": entities_n, "fact_count": facts_n}
+        cur.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM entities) AS entity_count,
+                (SELECT COUNT(*) FROM facts)    AS fact_count
+        """)
+        row = cur.fetchone()
+    return {"count": int(row["entity_count"]), "fact_count": int(row["fact_count"])}
 
 
 @router.get("/entities/by-sector", tags=["entities"])

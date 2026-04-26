@@ -92,6 +92,23 @@ def request_stop() -> bool:
     return True
 
 
+def reset_state() -> None:
+    """Clear evolution state. Raises RuntimeError if evolution is currently running."""
+    with _lock:
+        if _state.status == "running":
+            raise RuntimeError("Evolution is running — wait for it to finish before resetting.")
+        _state.status            = "idle"
+        _state.current_iteration = 0
+        _state.best_score        = 0.0
+        _state.best_prompt       = ""
+        _state.iterations        = []
+        _state.error             = ""
+        _state.started_at        = 0.0
+        _state.finished_at       = 0.0
+        _state.stop_requested    = False
+    _save_state()
+
+
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
 _VERDICT_WEIGHT      = 0.40
@@ -221,7 +238,7 @@ def _run_one_iteration(
     iteration: int,
     prompt: str,
     test_cases: list[dict],
-    client: anthropic.Anthropic,
+    client: genai.Client,
 ) -> IterationResult:
     from vcbrain_harness.harness import solve  # reimport each iteration so prompt change is live
 

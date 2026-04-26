@@ -50,24 +50,11 @@ def stop_harness() -> dict:
 
 @router.post("/reset")
 def reset_harness() -> dict:
-    """Stop any running evolution and clear state (does not revert harness.py prompt)."""
-    from vcbrain_harness.evolution import _state, _lock, _save_state
-    import time
+    """Stop any running evolution and clear state."""
+    from vcbrain_harness.evolution import reset_state
 
-    with _lock:
-        if _state.status == "running":
-            raise HTTPException(
-                status_code=409,
-                detail="Evolution is running — wait for it to finish before resetting.",
-            )
-        _state.status            = "idle"
-        _state.current_iteration = 0
-        _state.best_score        = 0.0
-        _state.best_prompt       = ""
-        _state.iterations        = []
-        _state.error             = ""
-        _state.started_at        = 0.0
-        _state.finished_at       = 0.0
-
-    _save_state()
+    try:
+        reset_state()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"reset": True}
