@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import defaultdict
 
 from fastapi import APIRouter
@@ -39,16 +40,17 @@ _FUND_CONTEXT = """\
 
 # ── Gemini helpers ────────────────────────────────────────────────────────────
 
-def _gemini_client():
+def _make_client():
+    """Create one client per request. Must be stored in a variable — never chained inline."""
     from google import genai
     return genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 
-def _gemini(system_instruction: str, user_content: str, max_tokens: int = 400) -> str:
-    """Single Gemini synthesis call. Returns raw text (may contain basic HTML)."""
+def _gemini(client, system_instruction: str, user_content: str, max_tokens: int = 400) -> str:
+    """Single Gemini synthesis call. Accepts an already-created client to avoid GC issues."""
     from google.genai import types as genai_types
     model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    resp = _gemini_client().models.generate_content(
+    resp = client.models.generate_content(
         model=model,
         contents=user_content,
         config=genai_types.GenerateContentConfig(
@@ -94,27 +96,39 @@ Reply with JSON only — no markdown:
 """
 
 
-def _classify(message: str) -> dict:
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        return {"intent": "unknown", "entity": None, "entity2": None, "sector": None}
+_EMPTY_CLASSIFY = {"intent": "unknown", "entity": None, "entity2": None, "sector": None}
+
+
+def _classify(client, message: str) -> dict:
     from google.genai import types as genai_types
     model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    resp = _gemini_client().models.generate_content(
+    resp = client.models.generate_content(
         model=model,
-        contents=f'User question: "{message}"',
+        contents=f'User question: {message!r}',
         config=genai_types.GenerateContentConfig(
             system_instruction=_CLASSIFIER_SYSTEM,
-            max_output_tokens=80,
+            max_output_tokens=500,
         ),
     )
-    raw = resp.text.strip()
+    raw = (resp.text or "").strip()
+    if not raw:
+        return _EMPTY_CLASSIFY
+    # Strip optional ```json ... ``` fences Gemini sometimes adds
     if raw.startswith("```"):
-        raw = raw.split("```", 2)[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-    return json.loads(raw)
+        raw = re.sub(r"^```[a-z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw).strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Truncated JSON: extract intent field with regex as fallback
+        m = re.search(r'"intent"\s*:\s*"([^"]+)"', raw)
+        if not m:
+            return _EMPTY_CLASSIFY
+        intent = m.group(1)
+        entity  = (re.search(r'"entity"\s*:\s*"([^"]+)"', raw) or [None, None])[1]
+        entity2 = (re.search(r'"entity2"\s*:\s*"([^"]+)"', raw) or [None, None])[1]
+        sector  = (re.search(r'"sector"\s*:\s*"([^"]+)"', raw) or [None, None])[1]
+        return {"intent": intent, "entity": entity, "entity2": entity2, "sector": sector}
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
@@ -136,7 +150,7 @@ def _load_entity(name: str) -> tuple[dict | None, list[dict], list[dict]]:
     with get_dict_cursor() as cur:
         cur.execute("""
             SELECT f.attribute, f.value, f.confidence,
-                   COALESCE(s.type, 'unknown') AS source_type
+                   COALESCE(s.type::text, 'unknown') AS source_type
             FROM facts f
             LEFT JOIN sources s ON f.source_id = s.id
             WHERE f.entity_id = %(eid)s
@@ -147,8 +161,8 @@ def _load_entity(name: str) -> tuple[dict | None, list[dict], list[dict]]:
         cur.execute("""
             SELECT f1.attribute,
                    f1.value AS value_a, f2.value AS value_b,
-                   COALESCE(s1.type,'unknown') AS source_a,
-                   COALESCE(s2.type,'unknown') AS source_b,
+                   COALESCE(s1.type::text,'unknown') AS source_a,
+                   COALESCE(s2.type::text,'unknown') AS source_b,
                    c.status::text AS status
             FROM conflicts c
             JOIN facts f1 ON c.fact_a_id = f1.id
@@ -207,7 +221,7 @@ def _conflicts_to_briefing(conflicts: list[dict]) -> str:
 
 # ── Intent handlers ───────────────────────────────────────────────────────────
 
-def _handle_company(entity_name: str, user_message: str) -> dict:
+def _handle_company(client, entity_name: str, user_message: str) -> dict:
     ent, facts, conflicts = _load_entity(entity_name)
     if ent is None:
         return {
@@ -228,7 +242,7 @@ Company: {ent['name']} (type: {ent['type']})
 
 User question: "{user_message}"
 """
-    text = _gemini(_SYNTHESIS_SYSTEM, user_prompt)
+    text = _gemini(client, _SYNTHESIS_SYSTEM, user_prompt)
     return {"intent": "company", "entity": ent["name"], "text": text}
 
 
@@ -265,7 +279,7 @@ def _handle_brief(entity_name: str) -> dict:
                 "text": f"Brief generation failed: {exc}. Check GEMINI_API_KEY."}
 
 
-def _handle_comparison(entity_a: str, entity_b: str, user_message: str) -> dict:
+def _handle_comparison(client, entity_a: str, entity_b: str, user_message: str) -> dict:
     ent_a, facts_a, conf_a = _load_entity(entity_a)
     ent_b, facts_b, conf_b = _load_entity(entity_b)
 
@@ -300,7 +314,7 @@ You are a senior investment analyst comparing two portfolio candidates for Eastc
 Be specific, reference actual numbers, and give a clear recommendation.
 Format: <strong> for company names and key numbers, <br><br> between sections. Max 200 words.
 """
-    text = _gemini(system, user_prompt, max_tokens=500)
+    text = _gemini(client, system, user_prompt, max_tokens=500)
     return {"intent": "comparison", "entity": ent_a["name"], "entity2": ent_b["name"], "text": text}
 
 
@@ -329,14 +343,14 @@ def _handle_sector(sector_filter: str | None) -> dict:
                 FROM facts GROUP BY entity_id
             ),
             conflict_counts AS (
-                SELECT entity_id, COUNT(DISTINCT c.id) AS open_conflicts
+                SELECT entity_id, COUNT(DISTINCT id) AS open_conflicts
                 FROM (
                     SELECT f.entity_id, c.id FROM conflicts c
                     JOIN facts f ON c.fact_a_id = f.id WHERE c.status='open'
                     UNION ALL
                     SELECT f.entity_id, c.id FROM conflicts c
                     JOIN facts f ON c.fact_b_id = f.id WHERE c.status='open'
-                ) s GROUP BY entity_id
+                ) sub GROUP BY entity_id
             )
             SELECT COALESCE(sf.sector,'Unknown')        AS sector,
                    COUNT(DISTINCT e.id)                 AS company_count,
@@ -384,14 +398,14 @@ def _handle_sector(sector_filter: str | None) -> dict:
     return {"intent": "sector", "text": text, "sectors": rows}
 
 
-def _handle_conflicts(user_message: str) -> dict:
+def _handle_conflicts(client, user_message: str) -> dict:
     """Fetch open conflicts, annotate with delta %, ask Gemini for top-3 triage."""
     with get_dict_cursor() as cur:
         cur.execute("""
             SELECT c.id::text AS conflict_id, e.name AS entity_name,
                    f1.attribute, f1.value AS value_a, f2.value AS value_b,
-                   COALESCE(s1.type,'unknown') AS source_a,
-                   COALESCE(s2.type,'unknown') AS source_b,
+                   COALESCE(s1.type::text,'unknown') AS source_a,
+                   COALESCE(s2.type::text,'unknown') AS source_b,
                    c.status::text AS status
             FROM conflicts c
             JOIN facts f1 ON c.fact_a_id = f1.id
@@ -445,7 +459,7 @@ You are a VC data analyst triaging conflicts in the fund's fact graph.
 Be specific and actionable. Format each conflict as a short numbered point.
 Use <strong> for company names and numbers. Max 200 words.
 """
-    top3_text = _gemini(system, user_prompt, max_tokens=400)
+    top3_text = _gemini(client, system, user_prompt, max_tokens=400)
     open_count = len(annotated)
     header = (f'<strong style="color:var(--amber)">{open_count} open conflicts</strong> '
               f'in the fact graph.<br><br>')
@@ -497,9 +511,28 @@ async def chat(body: ChatRequest) -> dict:
     msg = body.message.strip()
 
     def _handle() -> dict:
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if not api_key:
+            return {
+                "intent": "error",
+                "text": "GEMINI_API_KEY is not configured. Add it to your .env and restart.",
+            }
+
+        client = _make_client()
         try:
-            clf = _classify(msg)
-        except Exception:
+            clf = _classify(client, msg)
+        except Exception as exc:
+            import logging
+            logging.getLogger("vcbrain.chat").error("_classify failed: %s", exc, exc_info=True)
+            exc_str = str(exc)
+            if "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str:
+                return {
+                    "intent": "error",
+                    "text": (
+                        "Gemini API rate limit reached — please wait a few seconds and try again. "
+                        "(<em>Free tier: ~15 requests/min</em>)"
+                    ),
+                }
             clf = {"intent": "unknown", "entity": None, "entity2": None, "sector": None}
 
         intent  = clf.get("intent", "unknown")
@@ -508,12 +541,12 @@ async def chat(body: ChatRequest) -> dict:
         sector  = clf.get("sector")
 
         try:
-            if intent == "company"    and entity:  return _handle_company(entity, msg)
+            if intent == "company"    and entity:  return _handle_company(client, entity, msg)
             if intent == "brief"      and entity:  return _handle_brief(entity)
             if intent == "comparison" and entity and entity2:
-                                                   return _handle_comparison(entity, entity2, msg)
+                                                   return _handle_comparison(client, entity, entity2, msg)
             if intent == "sector":                 return _handle_sector(sector)
-            if intent == "conflicts":              return _handle_conflicts(msg)
+            if intent == "conflicts":              return _handle_conflicts(client, msg)
             if intent == "harness":                return _handle_harness()
             if intent == "stats":                  return _handle_stats()
         except Exception as exc:
