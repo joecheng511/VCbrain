@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 
 from .config import settings
 from .db import close_pool, init_pool
+from .routes import chat as chat_router
 from .routes import entities
 from .routes import harness as harness_router
 
@@ -99,6 +100,7 @@ def health() -> dict[str, str]:
 
 app.include_router(entities.router, tags=["entities"])
 app.include_router(harness_router.router)
+app.include_router(chat_router.router)
 
 
 @app.get("/brief/{name}", tags=["briefs"])
