@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for the DealBrain context base.
+"""FastAPI entrypoint for VC Brain.
 
 Run locally:
     uvicorn app.main:app --reload --port 8000
@@ -52,10 +52,10 @@ def _brief_cache_set(key: str, value: dict) -> None:
 async def lifespan(app: FastAPI):
     init_pool()
 
-    if not settings.gemini_api_key:
+    if not settings.anthropic_api_key:
         log.warning(
-            "GEMINI_API_KEY is not set — /brief/{name} and harness evolution will fail. "
-            "Add GEMINI_API_KEY to your .env file and restart."
+            "ANTHROPIC_API_KEY is not set — /brief/{name} and harness evolution will fail. "
+            "Add ANTHROPIC_API_KEY to your .env file and restart."
         )
 
     # Restore any previous evolution state from disk
@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
     load_persisted_state()
 
     # Auto-start evolution if configured and API key is present
-    if settings.harness_auto_run and settings.gemini_api_key:
+    if settings.harness_auto_run and settings.anthropic_api_key:
         from vcbrain_harness.evolution import get_state, start_evolution_thread
         if get_state()["status"] not in ("running", "done"):
             start_evolution_thread(max_iterations=settings.harness_max_iterations)
@@ -73,8 +73,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="DealBrain Context Base",
-    description="Layer 2: structured fact graph with provenance.",
+    title="VC Brain",
+    description="Eastcoast Fund — structured fact graph, briefs, chat, and harness evolution.",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -95,7 +95,7 @@ def serve_ui() -> FileResponse:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "dealbrain"}
+    return {"status": "ok", "service": "vc-brain"}
 
 
 app.include_router(entities.router, tags=["entities"])
@@ -105,10 +105,10 @@ app.include_router(chat_router.router)
 
 @app.get("/brief/{name}", tags=["briefs"])
 async def generate_brief(name: str) -> dict:
-    """Generate a Gemini investment brief for a named entity.
+    """Generate a Claude investment brief for a named entity.
 
-    Requires GEMINI_API_KEY in the environment.
-    Results are cached for 5 minutes to avoid redundant Gemini API calls.
+    Requires ANTHROPIC_API_KEY in the environment.
+    Results are cached for 5 minutes to avoid redundant API calls.
     """
     cached = _brief_cache_get(name)
     if cached is not None:
@@ -128,7 +128,7 @@ async def generate_brief(name: str) -> dict:
     except KeyError as exc:
         raise HTTPException(
             status_code=503,
-            detail=f"Missing environment variable: {exc}. Set GEMINI_API_KEY.",
+            detail=f"Missing environment variable: {exc}. Set ANTHROPIC_API_KEY.",
         ) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

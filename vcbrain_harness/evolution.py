@@ -9,7 +9,7 @@ How it works
      - 0.40 pts  — verdict matches expected
      - 0.40 pts  — fraction of must_mention keywords found in the output
      - 0.20 pts  — fraction of must_not_hallucinate keywords NOT found
-4. Send failures to Gemini asking it to rewrite the analyst prompt
+4. Send failures to Claude asking it to rewrite the analyst prompt
 5. Validate the new prompt and keep it in memory for the next iteration
 6. Repeat for max_iterations; always keep the best-scoring prompt
 7. Persist best prompt + state to vcbrain_tasks/evolution_state.json after each iteration
@@ -32,8 +32,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from google import genai
-from google.genai import types as genai_types
+import anthropic
+
+from vcbrain_harness.claude_util import chat_text, make_client
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -67,11 +68,38 @@ class EvolutionState:
     started_at: float = 0.0
     finished_at: float = 0.0
     stop_requested: bool = False
+    # Live progress for UI polling (in-memory; cleared when run finishes)
+    live_phase: str = ""           # starting | evaluating | summarizing | improving | ""
+    live_detail: str = ""
+    live_case_index: int = 0       # 1..N while evaluating; 0 when idle
+    live_case_total: int = 0
+    live_case_name: str = ""
 
 
 # Singleton — shared between the FastAPI route and the background thread
 _state = EvolutionState()
 _lock  = threading.Lock()
+
+
+def _set_live(
+    phase: str,
+    detail: str = "",
+    *,
+    case_index: int = 0,
+    case_total: int = 0,
+    case_name: str = "",
+) -> None:
+    """Update fields read by GET /harness/status while a run is in progress."""
+    with _lock:
+        _state.live_phase = phase
+        _state.live_detail = detail
+        _state.live_case_index = case_index
+        _state.live_case_total = case_total
+        _state.live_case_name = case_name
+
+
+def _clear_live() -> None:
+    _set_live("", "", case_index=0, case_total=0, case_name="")
 
 
 def get_state() -> dict:
@@ -106,6 +134,11 @@ def reset_state() -> None:
         _state.started_at        = 0.0
         _state.finished_at       = 0.0
         _state.stop_requested    = False
+        _state.live_phase        = ""
+        _state.live_detail       = ""
+        _state.live_case_index   = 0
+        _state.live_case_total   = 0
+        _state.live_case_name    = ""
     _save_state()
 
 
@@ -198,9 +231,7 @@ Rules:
 """
 
 
-def _improve_prompt(current_prompt: str, failures: list[dict], client: genai.Client) -> str:
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-
+def _improve_prompt(current_prompt: str, failures: list[dict], client: anthropic.Anthropic) -> str:
     failure_text = "\n".join(
         f"Company: {f['input']}\n"
         f"  Expected verdict: {f['expected_verdict']}\n"
@@ -221,15 +252,12 @@ Failed test cases:
 Rewrite the prompt to fix these failures.
 """
 
-    response = client.models.generate_content(
-        model=model,
-        contents=user_msg,
-        config=genai_types.GenerateContentConfig(
-            system_instruction=_IMPROVER_SYSTEM,
-            max_output_tokens=2048,
-        ),
+    return chat_text(
+        client,
+        system=_IMPROVER_SYSTEM,
+        user=user_msg,
+        max_tokens=2048,
     )
-    return response.text.strip()
 
 
 # ── Single iteration ──────────────────────────────────────────────────────────
@@ -238,17 +266,36 @@ def _run_one_iteration(
     iteration: int,
     prompt: str,
     test_cases: list[dict],
-    client: genai.Client,
+    client: anthropic.Anthropic,
+    *,
+    iter_one_based: int,
+    iter_max: int,
 ) -> IterationResult:
     from vcbrain_harness.harness import solve  # reimport each iteration so prompt change is live
 
     t0 = time.time()
     case_scores: list[dict] = []
     failures:    list[dict] = []
+    n = len(test_cases)
 
-    for tc in test_cases:
+    _set_live(
+        "evaluating",
+        f"Iteration {iter_one_based}/{iter_max} — scoring {n} test briefs (Claude + rubric).",
+        case_index=0,
+        case_total=n,
+        case_name="",
+    )
+
+    for idx, tc in enumerate(test_cases):
         company = tc["input"]
         expected = tc["expected"]
+        _set_live(
+            "evaluating",
+            f"Generating brief & rubric score for test case {idx + 1} of {n}.",
+            case_index=idx + 1,
+            case_total=n,
+            case_name=company,
+        )
         try:
             raw  = solve(company)
             brief = json.loads(raw)
@@ -267,6 +314,14 @@ def _run_one_iteration(
                 "actual_verdict":   brief.get("verdict", "ERROR"),
                 "reasons":          reasons,
             })
+
+    _set_live(
+        "summarizing",
+        f"Iteration {iter_one_based}/{iter_max} — aggregating scores and failure report.",
+        case_index=n,
+        case_total=n,
+        case_name="",
+    )
 
     overall = round(sum(c["score"] for c in case_scores) / len(case_scores), 4) if case_scores else 0.0
     summary = (
@@ -290,6 +345,9 @@ def _run_one_iteration(
 def _save_state() -> None:
     with _lock:
         data = asdict(_state)
+    # Omit ephemeral live-progress fields from disk (UI-only; avoids stale JSON on reload)
+    for k in ("live_phase", "live_detail", "live_case_index", "live_case_total", "live_case_name"):
+        data.pop(k, None)
     _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     _STATE_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -314,6 +372,11 @@ def load_persisted_state() -> None:
             # If it was "running" when server died, mark it idle
             if _state.status == "running":
                 _state.status = "idle"
+            _state.live_phase      = ""
+            _state.live_detail     = ""
+            _state.live_case_index = 0
+            _state.live_case_total = 0
+            _state.live_case_name  = ""
     except Exception:
         pass  # corrupted state — start fresh
 
@@ -324,11 +387,11 @@ def run_evolution(max_iterations: int = 5) -> None:
     """Blocking evolution loop. Call from a thread."""
     global _state
 
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         with _lock:
             _state.status = "error"
-            _state.error  = "GEMINI_API_KEY is not set"
+            _state.error  = "ANTHROPIC_API_KEY is not set"
         _save_state()
         return
 
@@ -340,7 +403,7 @@ def run_evolution(max_iterations: int = 5) -> None:
         return
 
     test_cases = json.loads(_TEST_CASES.read_text(encoding="utf-8"))
-    client     = genai.Client(api_key=api_key)
+    client = make_client()
 
     with _lock:
         _state.status            = "running"
@@ -361,9 +424,23 @@ def run_evolution(max_iterations: int = 5) -> None:
         for i in range(max_iterations):
             with _lock:
                 _state.current_iteration = i + 1
+            _set_live(
+                "starting",
+                f"Starting iteration {i + 1} of {max_iterations}…",
+                case_index=0,
+                case_total=len(test_cases),
+                case_name="",
+            )
             _save_state()
 
-            result = _run_one_iteration(i, current_prompt, test_cases, client)
+            result = _run_one_iteration(
+                i,
+                current_prompt,
+                test_cases,
+                client,
+                iter_one_based=i + 1,
+                iter_max=max_iterations,
+            )
 
             if result.score >= best_score:
                 best_score  = result.score
@@ -385,8 +462,15 @@ def run_evolution(max_iterations: int = 5) -> None:
                         _state.status = "stopped"
                 break
 
-            # Ask Gemini to improve the prompt for the next iteration
+            # Ask Claude to improve the prompt for the next iteration
             if result.failures and i < max_iterations - 1:
+                _set_live(
+                    "improving",
+                    f"Asking Claude to rewrite the analyst prompt from {len(result.failures)} failing case(s)…",
+                    case_index=0,
+                    case_total=0,
+                    case_name="",
+                )
                 try:
                     improved = _improve_prompt(current_prompt, result.failures, client)
                     # Validate it still contains the required placeholders
@@ -409,6 +493,7 @@ def run_evolution(max_iterations: int = 5) -> None:
             _state.status = "error"
             _state.error  = str(exc)
 
+    _clear_live()
     _save_state()
 
 

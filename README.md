@@ -1,20 +1,28 @@
-# DealBrain — Context Base (Layer 2)
+# VC Brain
 
-Structured fact graph with provenance. The intelligence layer below RAG: not chunks, but verifiable facts an AI agent can operate on.
+A **VC fund intelligence** demo built on a PostgreSQL **fact graph**: companies, attributed facts with provenance, and explicit **data conflicts**. It ships with a **FastAPI** backend and a single-page **web UI** (`vcbrain.html`) served at the root URL.
 
-This repo is the Python backend that exposes a single REST endpoint to the Node/TS API:
+Use it to explore portfolio entities, resolve conflict queues, ask natural-language questions via a **Claude-powered chat router**, generate **investment briefs**, and run a **prompt evolution harness** that improves the analyst prompt against fixed test cases.
 
-```
-GET /entity/{name}
-  -> { entity, facts[], conflicts[] }
-```
+## Features
+
+| Area | What you get |
+|------|----------------|
+| **Brain overview** | Portfolio stats, interactive force-directed knowledge graph (D3), conflict highlights |
+| **Conflict queue** | Open conflicts with links to source context; resolve via API |
+| **Company brief** | Search by name; facts and conflicts from the graph |
+| **Ask VC Brain** | `POST /chat` — intent routing (company, sector, stats, conflicts, comparison, general, …) + Claude answers with fund context |
+| **Harness evolution** | Background loop: score briefs on test cases, ask Claude to rewrite the system prompt; **live progress** in the UI (per-case activity + log) |
+| **Investment brief JSON** | `GET /brief/{name}` — structured verdict via the same harness pipeline |
 
 ## Stack
 
-- Python 3.12, FastAPI, Uvicorn
-- PostgreSQL 14+ (with `uuid-ossp`)
-- `psycopg2` — raw SQL, no ORM
-- Anthropic Claude (`claude-sonnet-4-6`) for entity/fact extraction (Hour 2-5)
+- **Python** 3.12+ (3.13 supported)
+- **FastAPI** + **Uvicorn**
+- **PostgreSQL** 14+ (`uuid-ossp`; schema in `schema.sql`)
+- **psycopg2** (thread-safe pool)
+- **Anthropic** [Messages API](https://docs.anthropic.com/) — default model **`claude-sonnet-4-6`** (override with `ANTHROPIC_MODEL`)
+- Optional: **Pioneer / GLiNER2**-style context compaction for the harness (`PIONEER_API_KEY`, `COMPACT_CONTEXT`, … in `app/config.py`)
 
 ## Quick start
 
@@ -25,108 +33,129 @@ createdb dealbrain
 psql dealbrain -f schema.sql
 ```
 
-### 2. Install Python deps
+### 2. Install dependencies
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Configure env
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
-# edit DATABASE_URL and ANTHROPIC_API_KEY
 ```
 
-### 4. Seed mock data (50 facts)
+Edit `.env`:
+
+- **`DATABASE_URL`** — PostgreSQL connection string
+- **`ANTHROPIC_API_KEY`** — required for `/chat`, `/brief/{name}`, and harness evolution
+- **`ANTHROPIC_MODEL`** — optional; defaults to `claude-sonnet-4-6`
+
+See `.env.example` for CORS, DB pool size, and **`HARNESS_AUTO_RUN`** / **`HARNESS_MAX_ITERATIONS`**.
+
+### 4. Load data
+
+If you use the bundled seed:
 
 ```bash
 python -m app.seed
 ```
 
-### 5. Run the API
+For a full demo (hundreds of companies + conflicts), load your own JSON into PostgreSQL using your existing ingestion path (e.g. `vcbrain_data/` → DB).
+
+### 5. Run the server
 
 ```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 6. Smoke test
+Open **http://localhost:8000** for the UI, or **http://localhost:8000/docs** for OpenAPI.
 
-```bash
-curl http://localhost:8000/                          # health
-curl http://localhost:8000/entity/Acme%20Corp        # full entity
-curl http://localhost:8000/entity/Initech            # has an OPEN conflict
-curl http://localhost:8000/entity/Globex%20Inc       # has an AUTO_RESOLVED conflict
-```
+## API overview
 
-Or open `http://localhost:8000/docs` for the auto-generated Swagger UI.
+| Method | Path | Purpose |
+|--------|------|--------|
+| GET | `/` | Web UI (`vcbrain.html`) |
+| GET | `/health` | Liveness |
+| GET | `/entity/{name}` | Entity + facts + conflicts |
+| GET | `/conflicts` | Conflict list (optional filters) |
+| PATCH | `/conflicts/{id}/resolve` | Mark conflict human-resolved |
+| GET | `/entities/count` | Entity and fact counts |
+| GET | `/entities/by-sector` | Sector rollup (counts, ARR, open conflicts) |
+| GET | `/brief/{name}` | Claude investment brief (JSON); TTL-cached |
+| POST | `/chat` | Chat body: `{ "message": "..." }` → `{ intent, text }` (HTML in `text`) |
+| POST | `/harness/run` | Start evolution (`max_iterations` query param) |
+| GET | `/harness/status` | State, iterations, **live progress** fields while running |
+| POST | `/harness/stop` | Stop after current iteration |
+| POST | `/harness/reset` | Clear harness state (not while running) |
 
-## Response shape (locked contract)
+Lookup for entities is case-insensitive (`canonical_name`).
+
+## Response shape (`GET /entity/{name}`)
 
 ```json
 {
-  "entity": { "id": "uuid", "type": "Company", "name": "Acme Corp" },
+  "entity": { "id": "uuid", "type": "Company", "name": "Example GmbH" },
   "facts": [
     {
-      "attribute": "ceo",
-      "value": "Alice Anderson",
-      "confidence": 1.0,
-      "source": { "type": "email", "external_id": "EMAIL-001" }
+      "attribute": "arr_eur",
+      "value": "1200000",
+      "confidence": 0.95,
+      "source": { "type": "crm", "external_id": "..." }
     }
   ],
   "conflicts": [
     {
-      "attribute": "annual_revenue",
-      "value_a": "$45M",
-      "value_b": "$52M",
+      "attribute": "arr_eur",
+      "value_a": "1200000",
+      "value_b": "980000",
       "status": "open"
     }
   ]
 }
 ```
 
-Lookup is case-insensitive (matches against `entities.canonical_name`).
+## Schema (summary)
 
-## Schema
+Defined in `schema.sql`:
 
-Four tables — see `schema.sql`:
+- **`entities`** — companies and other nodes; `canonical_name` for deduplication
+- **`sources`** — provenance (`email`, `crm`, `pdf`, …)
+- **`facts`** — `entity_id`, `attribute`, `value`, `source_id`, `confidence`
+- **`conflicts`** — pairs of facts, `status`: `open` | `auto_resolved` | `human_resolved`
 
-- `entities (id, type, name, canonical_name)` — `type` is `Company | Person | Deal | Document`
-- `sources (id, type, external_id, raw_content, ingested_at)` — `type` is `email | crm | pdf | hr_record`
-- `facts (id, entity_id, attribute, value, source_id, confidence, verified_by, verified_at)`
-- `conflicts (id, fact_a_id, fact_b_id, status)` — `status` is `open | auto_resolved | human_resolved`
-
-UUID primary keys throughout. `(canonical_name, type)` is uniquely indexed so we can dedup entities on insert. `raw_content` is JSONB so the original source record is preserved verbatim.
-
-## Layout
+## Repository layout
 
 ```
-schema.sql                  # DDL — run once
+schema.sql
+vcbrain.html                 # SPA UI (served by FastAPI)
+vcbrain_data/                # Sample / import JSON (optional)
+vcbrain_tasks/
+  test_cases.json            # Harness eval cases
+  evolution_state.json       # Persisted best prompt + run history (generated)
+vcbrain_harness/
+  harness.py                 # Brief generation (HTTP to Layer 2 + Claude)
+  evolution.py               # Prompt evolution loop + live progress fields
+  claude_util.py             # Shared Anthropic client helpers
 app/
-  main.py                   # FastAPI app + lifespan
-  config.py                 # env settings
-  db.py                     # psycopg2 connection pool
-  models.py                 # Pydantic response shapes
-  routes/entities.py        # GET /entity/{name}
-  seed.py                   # python -m app.seed
+  main.py                    # App entry, CORS, `/`, `/brief`, cache
+  config.py                  # Settings from env
+  db.py                      # Connection pool
+  routes/
+    entities.py              # Entities, conflicts, sector rollup
+    harness.py               # Harness HTTP API
+    chat.py                  # Claude chat router + fund context
 ```
 
-## Build status
+## Development notes
 
-| Hour     | Component                                         | Status      |
-|----------|---------------------------------------------------|-------------|
-| 0-2      | Schema + DB + 50 mock records                     | done        |
-| 0-2      | FastAPI skeleton + `GET /entity/{name}`           | done        |
-| 2-5      | Ingestion pipeline (EnterpriseBench + Claude)     | next        |
-| 5-8      | Conflict detection                                | pending     |
-| 8        | Integration checkpoint with partner               | pending     |
-| 14-18    | `GET /conflicts` review queue                     | pending     |
-| 18-22    | HubSpot live demo layer                           | stretch     |
+- **Secrets**: never commit `.env` or real API keys. `.env.example` uses placeholders only.
+- **Harness**: evolution runs in a background thread; the UI polls `/harness/status` about once per second while `status` is `running`.
+- **Partner integrations**: you can still treat `GET /entity/{name}` and related JSON as a stable contract for downstream services.
 
-## Constraints (do not violate)
+## License
 
-- No UI, no auth — partner owns those.
-- Every fact must link to a source. Broken provenance = lost demo.
-- Response shape is part of the partner contract. Do not change keys.
+Use and modify per your organization’s policy.

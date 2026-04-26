@@ -1,10 +1,10 @@
-"""POST /chat — Gemini-powered intent router with fund-context synthesis.
+"""POST /chat — Claude-powered intent router with fund-context synthesis.
 
 Flow
 ----
-1. Classify user message with a cheap Gemini call (~80 tokens).
+1. Classify user message with a small Claude call.
 2. Fetch structured data from PostgreSQL (pre-aggregated, not raw rows).
-3. For company / comparison / conflict intents: synthesize with Gemini
+3. For company / comparison / conflict / general intents: synthesize with Claude
    using enriched context + fund profile.
 4. For sector / stats / harness: build the HTML response in Python.
 
@@ -23,6 +23,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from ..db import get_dict_cursor
+from vcbrain_harness.claude_util import chat_text, make_client
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -38,27 +39,11 @@ _FUND_CONTEXT = """\
 - Model preference: B2B or B2B2C; €50K–€2M ARR at entry; strong founding team required
 """
 
-# ── Gemini helpers ────────────────────────────────────────────────────────────
+# ── Claude helpers ────────────────────────────────────────────────────────────
 
-def _make_client():
-    """Create one client per request. Must be stored in a variable — never chained inline."""
-    from google import genai
-    return genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-
-
-def _gemini(client, system_instruction: str, user_content: str, max_tokens: int = 400) -> str:
-    """Single Gemini synthesis call. Accepts an already-created client to avoid GC issues."""
-    from google.genai import types as genai_types
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    resp = client.models.generate_content(
-        model=model,
-        contents=user_content,
-        config=genai_types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            max_output_tokens=max_tokens,
-        ),
-    )
-    return resp.text.strip()
+def _claude(client, system_instruction: str, user_content: str, max_tokens: int = 400) -> str:
+    """Single Claude Messages API call."""
+    return chat_text(client, system=system_instruction, user=user_content, max_tokens=max_tokens)
 
 
 _SYNTHESIS_SYSTEM = f"""\
@@ -72,7 +57,7 @@ No markdown. Max 150 words. Never make up data not in the provided context.
 # ── Intent classifier ─────────────────────────────────────────────────────────
 
 _CLASSIFIER_SYSTEM = """\
-You are a routing classifier for VCbrain, a VC fund AI assistant.
+You are a routing classifier for VC Brain, a VC fund AI assistant.
 Classify the user question into EXACTLY ONE intent.
 
 Intents:
@@ -102,20 +87,15 @@ _EMPTY_CLASSIFY = {"intent": "unknown", "entity": None, "entity2": None, "sector
 
 
 def _classify(client, message: str) -> dict:
-    from google.genai import types as genai_types
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    resp = client.models.generate_content(
-        model=model,
-        contents=f'User question: {message!r}',
-        config=genai_types.GenerateContentConfig(
-            system_instruction=_CLASSIFIER_SYSTEM,
-            max_output_tokens=150,
-        ),
+    raw = _claude(
+        client,
+        _CLASSIFIER_SYSTEM,
+        f"User question: {message!r}",
+        max_tokens=256,
     )
-    raw = (resp.text or "").strip()
     if not raw:
         return _EMPTY_CLASSIFY
-    # Strip optional ```json ... ``` fences Gemini sometimes adds
+    # Strip optional ```json ... ``` fences the model sometimes adds
     if raw.startswith("```"):
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
         raw = re.sub(r"\n?```$", "", raw).strip()
@@ -244,7 +224,7 @@ Company: {ent['name']} (type: {ent['type']})
 
 User question: "{user_message}"
 """
-    text = _gemini(client, _SYNTHESIS_SYSTEM, user_prompt)
+    text = _claude(client, _SYNTHESIS_SYSTEM, user_prompt)
     return {"intent": "company", "entity": ent["name"], "text": text}
 
 
@@ -278,7 +258,7 @@ def _handle_brief(entity_name: str) -> dict:
                 "text": f"<strong>{entity_name}</strong> not found in the fact graph."}
     except Exception as exc:
         return {"intent": "error",
-                "text": f"Brief generation failed: {exc}. Check GEMINI_API_KEY."}
+                "text": f"Brief generation failed: {exc}. Check ANTHROPIC_API_KEY."}
 
 
 def _handle_comparison(client, entity_a: str, entity_b: str, user_message: str) -> dict:
@@ -316,7 +296,7 @@ You are a senior investment analyst comparing two portfolio candidates for Eastc
 Be specific, reference actual numbers, and give a clear recommendation.
 Format: <strong> for company names and key numbers, <br><br> between sections. Max 200 words.
 """
-    text = _gemini(client, system, user_prompt, max_tokens=500)
+    text = _claude(client, system, user_prompt, max_tokens=500)
     return {"intent": "comparison", "entity": ent_a["name"], "entity2": ent_b["name"], "text": text}
 
 
@@ -461,7 +441,7 @@ You are a VC data analyst triaging conflicts in the fund's fact graph.
 Be specific and actionable. Format each conflict as a short numbered point.
 Use <strong> for company names and numbers. Max 200 words.
 """
-    top3_text = _gemini(client, system, user_prompt, max_tokens=400)
+    top3_text = _claude(client, system, user_prompt, max_tokens=400)
     open_count = len(annotated)
     header = (f'<strong style="color:var(--amber)">{open_count} open conflicts</strong> '
               f'in the fact graph.<br><br>')
@@ -494,7 +474,7 @@ def _handle_stats() -> dict:
                    (SELECT COUNT(*) FROM conflicts WHERE status='open') AS open_conflicts
         """)
         row = dict(cur.fetchone())
-    text = (f'VCbrain tracks '
+    text = (f'VC Brain tracks '
             f'<strong>{int(row["entity_count"]):,} companies</strong> with '
             f'<strong>{int(row["fact_count"]):,} facts</strong> and '
             f'<strong style="color:var(--amber)">{int(row["open_conflicts"])} open conflicts</strong>.')
@@ -502,7 +482,7 @@ def _handle_stats() -> dict:
 
 
 def _handle_general(client, user_message: str) -> dict:
-    """Catch-all: fetch a rich portfolio summary and let Gemini answer freely."""
+    """Catch-all: fetch a rich portfolio summary and let Claude answer freely."""
     with get_dict_cursor() as cur:
         # Top 20 companies by ARR with key facts
         cur.execute("""
@@ -553,7 +533,7 @@ Use <strong> for key names and numbers. Keep the answer under 200 words. No mark
 
 User question: "{user_message}"
 """
-    text = _gemini(client, system, user_prompt, max_tokens=400)
+    text = _claude(client, system, user_prompt, max_tokens=400)
     return {"intent": "general", "text": text}
 
 
@@ -565,30 +545,46 @@ class ChatRequest(BaseModel):
 
 @router.post("")
 async def chat(body: ChatRequest) -> dict:
-    """Classify the user message, fetch enriched data, synthesize with Gemini where needed."""
+    """Classify the user message, fetch enriched data, synthesize with Claude where needed."""
     msg = body.message.strip()
 
     def _handle() -> dict:
-        api_key = os.environ.get("GEMINI_API_KEY", "")
-        if not api_key:
+        import anthropic
+        import logging
+
+        if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
             return {
                 "intent": "error",
-                "text": "GEMINI_API_KEY is not configured. Add it to your .env and restart.",
+                "text": "ANTHROPIC_API_KEY is not configured. Add it to your .env and restart.",
             }
 
-        client = _make_client()
+        try:
+            client = make_client()
+        except KeyError:
+            return {
+                "intent": "error",
+                "text": "ANTHROPIC_API_KEY is not configured. Add it to your .env and restart.",
+            }
+
         try:
             clf = _classify(client, msg)
+        except anthropic.RateLimitError as exc:
+            logging.getLogger("vcbrain.chat").warning("Claude rate limit: %s", exc)
+            return {
+                "intent": "error",
+                "text": (
+                    "Anthropic API rate limit reached — wait a moment and try again. "
+                    "See your plan limits in the Anthropic console."
+                ),
+            }
         except Exception as exc:
-            import logging
             logging.getLogger("vcbrain.chat").error("_classify failed: %s", exc, exc_info=True)
             exc_str = str(exc)
-            if "429" in exc_str or "RESOURCE_EXHAUSTED" in exc_str:
+            if "429" in exc_str or "rate_limit" in exc_str.lower():
                 return {
                     "intent": "error",
                     "text": (
-                        "Gemini API rate limit reached — please wait a few seconds and try again. "
-                        "(<em>Free tier: ~15 requests/min</em>)"
+                        "Anthropic API rate limit reached — wait a moment and try again."
                     ),
                 }
             clf = {"intent": "unknown", "entity": None, "entity2": None, "sector": None}

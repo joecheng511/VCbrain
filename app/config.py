@@ -12,8 +12,8 @@ load_dotenv()
 @dataclass(frozen=True)
 class Settings:
     database_url: str
-    gemini_api_key: str
-    gemini_model: str
+    anthropic_api_key: str
+    anthropic_model: str
     db_pool_min: int
     db_pool_max: int
     cors_origins: list[str]
@@ -38,8 +38,8 @@ def load_settings() -> Settings:
             "DATABASE_URL",
             "postgresql://postgres:postgres@localhost:5432/dealbrain",
         ),
-        gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
-        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+        anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+        anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
         db_pool_min=int(os.getenv("DB_POOL_MIN", "2")),
         db_pool_max=int(os.getenv("DB_POOL_MAX", "10")),
         cors_origins=cors_origins,

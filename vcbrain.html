@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VCbrain — Eastcoast Fund</title>
+<title>VC Brain — Eastcoast Fund</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -122,6 +122,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .improvement-card{background:rgba(139,127,240,.08);border:1px solid rgba(139,127,240,.2);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px}
 .improvement-val{font-family:var(--mono);font-size:30px;color:var(--purple2);letter-spacing:-1px}
 .improvement-label{font-size:11px;color:var(--muted);margin-top:4px}
+.harness-live{border:1px solid var(--border2);border-radius:12px;background:linear-gradient(145deg,rgba(139,127,240,.07),rgba(45,212,160,.04));margin-bottom:18px;overflow:hidden}
+.harness-live-inner{padding:14px 16px 16px}
+.harness-live-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+.live-pulse{width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0;margin-top:4px;box-shadow:0 0 0 0 rgba(45,212,160,.5);animation:harnessPulse 1.4s ease-out infinite}
+.harness-live:not(.is-running) .live-pulse{animation:none;background:var(--muted);box-shadow:none;opacity:.45}
+@keyframes harnessPulse{0%{box-shadow:0 0 0 0 rgba(45,212,160,.45)}70%{box-shadow:0 0 0 10px rgba(45,212,160,0)}100%{box-shadow:0 0 0 0 rgba(45,212,160,0)}}
+.live-title{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--purple2);margin-bottom:4px}
+.live-phase{font-size:14px;font-weight:500;color:var(--text);line-height:1.35}
+.live-detail{font-size:12px;color:var(--muted2);margin-top:6px;line-height:1.45;max-width:720px}
+.live-case{font-family:var(--mono);font-size:11px;color:var(--text);margin-top:8px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;word-break:break-word}
+.live-progress-row{margin-top:12px}
+.live-progress-label{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:4px}
+.live-progress-track{height:6px;background:var(--bg4);border-radius:6px;overflow:hidden}
+.live-progress-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--purple2),var(--green));transition:width .35s ease}
+.live-log{margin-top:12px;max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg2);padding:8px 10px;font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--muted2)}
+.live-log-line{color:var(--muted);border-bottom:1px solid var(--border);padding:3px 0}
+.live-log-line:last-child{border-bottom:none}
+.harness-live.is-hidden{display:none}
 .learn-item{padding:9px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted2);display:flex;gap:8px;line-height:1.5}
 .learn-item:last-child{border-bottom:none}
 .learn-dot{width:4px;height:4px;border-radius:50%;background:var(--purple);margin-top:5px;flex-shrink:0}
@@ -157,7 +175,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 <body>
 <aside class="sidebar">
   <div class="logo">
-    <div class="logo-name">VC<em>brain</em></div>
+    <div class="logo-name">VC <em>Brain</em></div>
     <div class="logo-fund">Eastcoast Fund · 2026</div>
   </div>
   <nav class="nav">
@@ -179,7 +197,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
     </button>
     <div class="nav-section" style="margin-top:6px">Assistant</div>
     <button class="nav-item" onclick="showView('chat')">
-      <span class="nav-icon">✦</span> Ask VCbrain
+      <span class="nav-icon">✦</span> Ask VC Brain
     </button>
   </nav>
   <div class="sidebar-footer">
@@ -270,7 +288,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
       <span class="search-icon">◎</span>
       <input class="search-input" type="text" id="company-search" placeholder="Search any company — e.g. Solarix, LogiChain, ClimateLedger, MediFlow…" oninput="searchCompany(this.value)">
     </div>
-    <div id="brief-container"><div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Search a company to see everything VCbrain knows.<br>Every fact is traceable to its source.</div></div></div>
+    <div id="brief-container"><div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Search a company to see everything VC Brain knows.<br>Every fact is traceable to its source.</div></div></div>
   </div>
 
   <!-- HARNESS -->
@@ -283,6 +301,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
         <button class="btn btn-a" id="harness-run-btn" onclick="startHarness()">Run evolution</button>
         <button class="btn" id="harness-stop-btn" onclick="stopHarness()" style="display:none;color:var(--red);border-color:rgba(248,113,113,.3)">Stop</button>
         <button class="btn" onclick="renderHarness()">Refresh</button>
+      </div>
+    </div>
+
+    <!-- Live activity (backend progress while evolution runs) -->
+    <div id="harness-live" class="harness-live is-hidden">
+      <div class="harness-live-inner">
+        <div class="harness-live-top">
+          <div class="live-pulse" aria-hidden="true"></div>
+          <div style="flex:1;min-width:0">
+            <div class="live-title">Background activity</div>
+            <div class="live-phase" id="harness-live-phase">—</div>
+            <div class="live-detail" id="harness-live-detail"></div>
+            <div class="live-case" id="harness-live-case" style="display:none"></div>
+            <div class="live-progress-row">
+              <div class="live-progress-label">
+                <span>Iteration progress</span>
+                <span id="harness-live-iter-pct">—</span>
+              </div>
+              <div class="live-progress-track"><div class="live-progress-fill" id="harness-live-iter-bar" style="width:0%"></div></div>
+            </div>
+            <div class="live-progress-row" id="harness-live-case-row" style="display:none">
+              <div class="live-progress-label">
+                <span>Test cases this iteration</span>
+                <span id="harness-live-case-pct">—</span>
+              </div>
+              <div class="live-progress-track"><div class="live-progress-fill" id="harness-live-case-bar" style="width:0%;background:var(--purple2)"></div></div>
+            </div>
+            <div class="live-log" id="harness-live-log" style="display:none"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -324,7 +372,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
       <span class="suggestion" onclick="sendSugg(this.textContent)">Brief me on Shah, Smith and Gilmore</span>
     </div>
     <div class="chat-messages" id="chat-messages">
-      <div class="msg"><div class="msg-avatar av-ai">VC</div><div class="msg-bubble">Good morning. I'm VCbrain — Eastcoast Fund's memory. I know facts across <strong>400 companies</strong> loaded from your PostgreSQL database.<br><br>I'm checking for open conflicts now — ask me about any company by name, or open the Conflict queue to start reviewing.<br><br>Ask me anything about your deal flow.</div></div>
+      <div class="msg"><div class="msg-avatar av-ai">VB</div><div class="msg-bubble">Good morning. I'm VC Brain — Eastcoast Fund's memory. I know facts across <strong>400 companies</strong> loaded from your PostgreSQL database.<br><br>I'm checking for open conflicts now — ask me about any company by name, or open the Conflict queue to start reviewing.<br><br>Ask me anything about your deal flow.</div></div>
     </div>
     <div class="chat-footer">
       <textarea class="chat-input" id="chat-input" placeholder="Ask about any company, conflict, or deal…" rows="1" onkeydown="handleKey(event)" oninput="resize(this)"></textarea>
@@ -342,8 +390,8 @@ const VIEWS = {
   brain:     {title:'Brain overview',    sub:'Fund intelligence at a glance'},
   conflicts: {title:'Conflict queue',    sub:'Loading…'},
   search:    {title:'Company brief',     sub:'Search any company by name'},
-  harness:   {title:'Harness evolution', sub:'How VCbrain gets smarter over time'},
-  chat:      {title:'Ask VCbrain',       sub:'Plain language fund intelligence'},
+  harness:   {title:'Harness evolution', sub:'How VC Brain gets smarter over time'},
+  chat:      {title:'Ask VC Brain',       sub:'Plain language fund intelligence'},
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -838,7 +886,7 @@ function searchCompany(val) {
   clearTimeout(_searchTimer);
   if (!val || val.length < 2) {
     document.getElementById('brief-container').innerHTML =
-      '<div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Search a company to see everything VCbrain knows.<br>Every fact is traceable to its source.</div></div>';
+      '<div class="empty"><div class="empty-icon">◎</div><div class="empty-text">Search a company to see everything VC Brain knows.<br>Every fact is traceable to its source.</div></div>';
     return;
   }
   _searchTimer = setTimeout(() => fetchEntity(val), 400);
@@ -906,7 +954,7 @@ function renderEntityBrief(data) {
         <div class="pill-row">${pills}</div>
       </div>
       <div class="brief-ai" id="brief-ai-section">
-        <div class="brief-ai-label">VCbrain — fact summary</div>
+        <div class="brief-ai-label">VC Brain — fact summary</div>
         <div class="brief-ai-text" id="brief-ai-text">
           ${conflictSummary}
           <div style="margin-top:10px">
@@ -945,7 +993,7 @@ async function generateBrief(companyName) {
       ${redFlags}${qs}`;
   } catch (e) {
     const msg = e.status === 503
-      ? 'Set GEMINI_API_KEY in your .env file, then restart the server.'
+      ? 'Set ANTHROPIC_API_KEY in your .env file, then restart the server.'
       : `Error: ${esc(e.message)}`;
     btn.textContent = 'Retry →';
     btn.disabled = false;
@@ -959,20 +1007,41 @@ async function generateBrief(companyName) {
 
 // ── Harness evolution — live from /harness/status ─────────────────────────────
 let _harnessPoller = null;
+let _harnessLiveLog = [];
+let _harnessLastLiveKey = '';
+
+function _harnessPhaseLabel(phase) {
+  const m = { starting: 'Starting iteration', evaluating: 'Scoring test briefs', summarizing: 'Aggregating iteration', improving: 'Evolving analyst prompt' };
+  return m[phase] || 'Working…';
+}
+
+function _appendHarnessLiveLog(linePlain) {
+  const t = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  _harnessLiveLog.push(t + ' · ' + linePlain);
+  if (_harnessLiveLog.length > 16) _harnessLiveLog.shift();
+  const el = document.getElementById('harness-live-log');
+  if (!el) return;
+  el.style.display = '';
+  el.innerHTML = _harnessLiveLog.map(s => '<div class="live-log-line">' + esc(s) + '</div>').join('');
+  el.scrollTop = el.scrollHeight;
+}
 
 async function renderHarness() {
   try {
     const data = await apiFetch('/harness/status');
     _applyHarnessState(data);
-    // If running, poll every 4 seconds
     if (data.status === 'running' && !_harnessPoller) {
       _harnessPoller = setInterval(async () => {
         try {
           const d = await apiFetch('/harness/status');
           _applyHarnessState(d);
-          if (d.status !== 'running') { clearInterval(_harnessPoller); _harnessPoller = null; }
+          if (d.status !== 'running') {
+            clearInterval(_harnessPoller);
+            _harnessPoller = null;
+            _harnessLastLiveKey = '';
+          }
         } catch (_) {}
-      }, 4000);
+      }, 850);
     }
   } catch (_) {
     document.getElementById('harness-status-text').textContent =
@@ -985,6 +1054,59 @@ function _applyHarnessState(data) {
   const statusText = document.getElementById('harness-status-text');
   const runBtn     = document.getElementById('harness-run-btn');
   const stopBtn    = document.getElementById('harness-stop-btn');
+  const livePanel  = document.getElementById('harness-live');
+
+  // ── Live activity panel (iteration + per-case progress from backend) ──
+  if (data.status === 'running') {
+    livePanel.classList.remove('is-hidden');
+    livePanel.classList.add('is-running');
+    const phase = data.live_phase || '';
+    const detail = data.live_detail || '';
+    const ci = data.live_case_index | 0;
+    const ct = data.live_case_total | 0;
+    const cname = data.live_case_name || '';
+    document.getElementById('harness-live-phase').textContent = _harnessPhaseLabel(phase) + (detail ? '' : '');
+    document.getElementById('harness-live-detail').textContent = detail || 'Preparing…';
+    const caseEl = document.getElementById('harness-live-case');
+    const caseRow = document.getElementById('harness-live-case-row');
+    if (cname && phase === 'evaluating') {
+      caseEl.style.display = '';
+      caseEl.innerHTML = '<span style="color:var(--muted)">Current case · </span>' + esc(cname);
+    } else {
+      caseEl.style.display = 'none';
+    }
+    const cur = data.current_iteration | 0, max = data.max_iterations | 1;
+    const iterPct = max ? Math.min(100, Math.round(((cur - 1) / max) * 100 + (ct && ci ? (ci / ct) * (100 / max) : 0))) : 0;
+    document.getElementById('harness-live-iter-bar').style.width = iterPct + '%';
+    document.getElementById('harness-live-iter-pct').textContent = 'Round ' + cur + ' / ' + max;
+    if (ct > 0 && phase === 'evaluating') {
+      caseRow.style.display = '';
+      const cp = Math.round((ci / ct) * 100);
+      document.getElementById('harness-live-case-bar').style.width = cp + '%';
+      document.getElementById('harness-live-case-pct').textContent = ci + ' / ' + ct + ' cases';
+    } else if (phase === 'summarizing' && ct > 0) {
+      caseRow.style.display = '';
+      document.getElementById('harness-live-case-bar').style.width = '100%';
+      document.getElementById('harness-live-case-pct').textContent = ct + ' / ' + ct + ' done';
+    } else {
+      caseRow.style.display = 'none';
+    }
+    const liveKey = phase + '|' + ci + '|' + cname + '|' + detail.slice(0, 80);
+    if (liveKey !== _harnessLastLiveKey) {
+      _harnessLastLiveKey = liveKey;
+      let logPlain = _harnessPhaseLabel(phase);
+      if (cname) logPlain += ': ' + cname;
+      else if (detail) logPlain += ' — ' + detail.slice(0, 120);
+      _appendHarnessLiveLog(logPlain);
+    }
+  } else {
+    livePanel.classList.remove('is-running');
+    livePanel.classList.add('is-hidden');
+    _harnessLiveLog = [];
+    _harnessLastLiveKey = '';
+    const logEl = document.getElementById('harness-live-log');
+    if (logEl) { logEl.innerHTML = ''; logEl.style.display = 'none'; }
+  }
 
   // Status pill colour
   const pillStyle = {
@@ -1000,7 +1122,10 @@ function _applyHarnessState(data) {
 
   if (data.status === 'running') {
     const cur = data.current_iteration, max = data.max_iterations;
-    statusText.textContent = `Running iteration ${cur} of ${max}…`;
+    const sub = (data.live_case_name && data.live_phase === 'evaluating')
+      ? ` · ${data.live_case_name.slice(0, 42)}${data.live_case_name.length > 42 ? '…' : ''}`
+      : '';
+    statusText.textContent = `Running iteration ${cur} of ${max}…${sub}`;
     runBtn.disabled = true; runBtn.textContent = 'Running…';
     stopBtn.style.display = ''; stopBtn.disabled = false; stopBtn.textContent = 'Stop';
   } else if (data.status === 'done') {
@@ -1076,6 +1201,8 @@ function _applyHarnessState(data) {
 }
 
 async function startHarness() {
+  _harnessLiveLog = [];
+  _harnessLastLiveKey = '';
   const btn = document.getElementById('harness-run-btn');
   btn.disabled = true; btn.textContent = 'Starting…';
   try {
@@ -1145,14 +1272,14 @@ function appendMsg(text, role) {
   d.className = 'msg' + (role === 'user' ? ' user' : '');
   // user input is escaped; AI responses are trusted HTML (built internally)
   const content = role === 'user' ? esc(text) : text;
-  d.innerHTML = `<div class="msg-avatar ${role==='user'?'av-user':'av-ai'}">${role==='user'?'EC':'VC'}</div><div class="msg-bubble">${content}</div>`;
+  d.innerHTML = `<div class="msg-avatar ${role==='user'?'av-user':'av-ai'}">${role==='user'?'EC':'VB'}</div><div class="msg-bubble">${content}</div>`;
   msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight; return d;
 }
 
 function appendTyping() {
   const msgs = document.getElementById('chat-messages');
   const d = document.createElement('div'); d.className = 'msg';
-  d.innerHTML = `<div class="msg-avatar av-ai">VC</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  d.innerHTML = `<div class="msg-avatar av-ai">VB</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
   msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight; return d;
 }
 

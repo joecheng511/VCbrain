@@ -4,7 +4,7 @@ VCbrain Layer 3 harness — v1.
 solve(company_name) -> JSON string:
   1. Fetches entity facts from GET /entity/{name}   (Layer 2)
   2. Fetches open conflicts from GET /conflicts?entity={name}  (Layer 2)
-  3. Sends merged context to Gemini, returns a structured VC investment brief.
+  3. Sends merged context to Claude, returns a structured VC investment brief.
 """
 
 from __future__ import annotations
@@ -16,12 +16,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from google import genai
+from vcbrain_harness.claude_util import chat_text, make_client
 
 logger = logging.getLogger(__name__)
 
 LAYER2_BASE = os.environ.get("LAYER2_BASE_URL", "http://localhost:8000")
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
 
 def _compact_enabled() -> bool:
@@ -194,13 +193,8 @@ def solve(input_data: str) -> str:
         conflicts_block=conflicts_block,
     )
 
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-    )
-
-    raw = response.text.strip()
+    client = make_client()
+    raw = chat_text(client, system=None, user=prompt, max_tokens=8192)
 
     # Strip accidental markdown fences
     if raw.startswith("```"):

@@ -12,3 +12,4 @@ venv/
 .ph_workspace/
 .claude/
 vcbrain_tasks/evolution_state.json
+vcbrain_harness/training_data/
