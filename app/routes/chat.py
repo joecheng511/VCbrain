@@ -82,14 +82,16 @@ Intents:
 - sector     : asking about sector/industry exposure, portfolio breakdown, or vertical analysis
 - conflicts  : asking about data conflicts, discrepancies, or items needing review
 - harness    : asking about AI/harness evolution status or improvement scores
-- stats      : asking for portfolio-wide counts (companies, facts, ARR totals, etc.)
-- unknown    : anything else
+- stats      : asking for portfolio-wide counts, overall fund status/health/overview, or general "state of the fund" questions
+- general    : any other analytical question about the fund, founders, rankings, trends, best/worst performers, team, strategy — anything that requires reasoning over fund data but doesn't fit the above
+- unknown    : completely off-topic questions unrelated to the fund or portfolio
 
 Rules:
 - Only use "company", "brief", or "comparison" when a SPECIFIC company name appears.
 - "the fund", "our portfolio", "our investments" are NOT company names.
 - Sector keywords (healthcare, fintech, SaaS, B2B, etc.) → "sector".
 - For "comparison", extract BOTH company names into entity and entity2.
+- Prefer "general" over "unknown" whenever the question is fund-related.
 
 Reply with JSON only — no markdown:
 {"intent": "...", "entity": "<name or null>", "entity2": "<second name or null>", "sector": "<keyword or null>"}
@@ -107,7 +109,7 @@ def _classify(client, message: str) -> dict:
         contents=f'User question: {message!r}',
         config=genai_types.GenerateContentConfig(
             system_instruction=_CLASSIFIER_SYSTEM,
-            max_output_tokens=500,
+            max_output_tokens=150,
         ),
     )
     raw = (resp.text or "").strip()
@@ -499,6 +501,62 @@ def _handle_stats() -> dict:
     return {"intent": "stats", "text": text}
 
 
+def _handle_general(client, user_message: str) -> dict:
+    """Catch-all: fetch a rich portfolio summary and let Gemini answer freely."""
+    with get_dict_cursor() as cur:
+        # Top 20 companies by ARR with key facts
+        cur.execute("""
+            SELECT e.name, e.type,
+                   MAX(CASE WHEN f.attribute='sector'    THEN f.value END) AS sector,
+                   MAX(CASE WHEN f.attribute='arr_eur'   THEN f.value END) AS arr_eur,
+                   MAX(CASE WHEN f.attribute='stage'     THEN f.value END) AS stage,
+                   MAX(CASE WHEN f.attribute='founder'   THEN f.value END) AS founder,
+                   MAX(CASE WHEN f.attribute='employees' THEN f.value END) AS employees,
+                   COUNT(DISTINCT f.id) AS fact_count
+            FROM entities e
+            LEFT JOIN facts f ON f.entity_id = e.id
+            GROUP BY e.id, e.name, e.type
+            ORDER BY MAX(CASE WHEN f.attribute='arr_eur' THEN f.value::numeric ELSE 0 END) DESC NULLS LAST
+            LIMIT 30
+        """)
+        top_cos = [dict(r) for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT (SELECT COUNT(*) FROM entities) AS entity_count,
+                   (SELECT COUNT(*) FROM facts)    AS fact_count,
+                   (SELECT COUNT(*) FROM conflicts WHERE status='open') AS open_conflicts
+        """)
+        totals = dict(cur.fetchone())
+
+    lines = [
+        f"Portfolio: {int(totals['entity_count'])} companies, "
+        f"{int(totals['fact_count'])} facts, "
+        f"{int(totals['open_conflicts'])} open conflicts.\n",
+        "Top 30 companies by ARR (name | sector | ARR € | stage | founder | employees):",
+    ]
+    for c in top_cos:
+        arr = f"€{float(c['arr_eur']):,.0f}" if c['arr_eur'] else "—"
+        lines.append(
+            f"  {c['name']} | {c['sector'] or '—'} | {arr} | "
+            f"{c['stage'] or '—'} | {c['founder'] or '—'} | {c['employees'] or '—'}"
+        )
+
+    portfolio_summary = "\n".join(lines)
+
+    system = f"""\
+{_FUND_CONTEXT}
+You are a senior VC analyst for Eastcoast Fund with access to the fund's full portfolio data.
+Answer the question specifically using the data provided. If data is incomplete, say so.
+Use <strong> for key names and numbers. Keep the answer under 200 words. No markdown, no bullet lists — use short sentences or <br><br> between paragraphs.
+"""
+    user_prompt = f"""{portfolio_summary}
+
+User question: "{user_message}"
+"""
+    text = _gemini(client, system, user_prompt, max_tokens=400)
+    return {"intent": "general", "text": text}
+
+
 # ── Route ─────────────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
@@ -549,6 +607,7 @@ async def chat(body: ChatRequest) -> dict:
             if intent == "conflicts":              return _handle_conflicts(client, msg)
             if intent == "harness":                return _handle_harness()
             if intent == "stats":                  return _handle_stats()
+            if intent == "general":                return _handle_general(client, msg)
         except Exception as exc:
             return {
                 "intent": "error",
