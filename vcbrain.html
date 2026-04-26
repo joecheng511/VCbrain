@@ -275,34 +275,42 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
   <!-- HARNESS -->
   <div id="view-harness" class="content" style="display:none">
+    <!-- Status bar -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <span id="harness-status-pill" style="font-family:var(--mono);font-size:10px;padding:3px 10px;border-radius:8px;border:1px solid var(--border2);color:var(--muted)">idle</span>
+      <span id="harness-status-text" style="font-size:12px;color:var(--muted)">Run the evolution loop to start improving the analyst prompt.</span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn btn-a" id="harness-run-btn" onclick="startHarness()">Run evolution</button>
+        <button class="btn" id="harness-stop-btn" onclick="stopHarness()" style="display:none;color:var(--red);border-color:rgba(248,113,113,.3)">Stop</button>
+        <button class="btn" onclick="renderHarness()">Refresh</button>
+      </div>
+    </div>
+
     <div class="harness-grid">
       <div>
-        <div class="section-title">Evolution history</div>
-        <div class="card card-pad" id="harness-iters"></div>
+        <div class="section-title">Iteration scores</div>
+        <div class="card card-pad" id="harness-iters">
+          <div style="color:var(--muted);font-size:12px;text-align:center;padding:16px 0">No iterations yet — click Run evolution to start.</div>
+        </div>
       </div>
       <div>
-        <div class="section-title">Total improvement</div>
-        <div class="improvement-card"><div class="improvement-val">+51%</div><div class="improvement-label">score increase since iter_0</div></div>
-        <div class="section-title">What the agent learned</div>
-        <div class="card card-pad">
-          <div class="learn-item"><div class="learn-dot"></div>Low-confidence facts require explicit hedging in briefs</div>
-          <div class="learn-item"><div class="learn-dot"></div>Conflicting ARR sources must be flagged, not averaged</div>
-          <div class="learn-item"><div class="learn-dot"></div>Founder questions land better as hypotheses</div>
-          <div class="learn-item"><div class="learn-dot"></div>Email sentiment outperforms CRM stage label as signal</div>
-          <div class="learn-item"><div class="learn-dot"></div>East German state context improves sector classification</div>
+        <div class="section-title">Overall improvement</div>
+        <div class="improvement-card">
+          <div class="improvement-val" id="harness-improvement">—</div>
+          <div class="improvement-label" id="harness-improvement-label">score increase since iter_0</div>
+        </div>
+        <div class="section-title" style="margin-top:14px">Best score</div>
+        <div class="card card-pad" style="text-align:center">
+          <div style="font-family:var(--mono);font-size:28px;color:var(--purple2);letter-spacing:-1px" id="harness-best-score">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="harness-best-label">not yet evaluated</div>
         </div>
       </div>
     </div>
-    <div class="section-title">Output comparison — iter_0 vs iter_7</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      <div class="card card-pad">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--red);letter-spacing:.08em;margin-bottom:8px;text-transform:uppercase">iter_0 · score 0.41</div>
-        <div style="font-size:12px;line-height:1.65;color:var(--muted2)">Solarix Energy is a solar company in Leipzig with €480K ARR and 12 employees. CEO is Tobias Brenner. They are raising €800K.</div>
-      </div>
-      <div class="card card-pad" style="border-color:rgba(139,127,240,.25)">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.08em;margin-bottom:8px;text-transform:uppercase">iter_7 · score 0.84 · best</div>
-        <div style="font-size:12px;line-height:1.65;color:var(--text)"><span style="color:var(--amber)">ARR conflict flagged:</span> CRM €480K vs pitch deck €520K (8.3% delta) — verify before IC. Technical founders ex-Siemens + TU Dresden. 62 installations, 94% CSAT. East German SME thesis: strong fit. Advance to DD, resolve ARR first.</div>
-      </div>
+
+    <!-- Per-case breakdown (shown after at least 1 iteration) -->
+    <div id="harness-cases-section" style="display:none">
+      <div class="section-title" style="margin-top:6px">Last iteration — per company</div>
+      <div class="card" id="harness-cases"></div>
     </div>
   </div>
 
@@ -949,31 +957,143 @@ async function generateBrief(companyName) {
   }
 }
 
-// ── Harness evolution (static — will show real data once ph run completes) ────
-const ITERS = [
-  {iter:'iter_0', score:.41, note:'Baseline — no evolution yet',       best:false},
-];
+// ── Harness evolution — live from /harness/status ─────────────────────────────
+let _harnessPoller = null;
 
-function renderHarness() {
-  // Try to load real evolution data from agent API; fall back to ITERS
-  apiFetch('http://localhost:8001/agent/evolution').then(data => {
-    const iters = (data.iterations || []).map((it, i) => ({
-      iter: `iter_${i}`, score: it.score, note: it.summary || '', best: it.is_best,
-    }));
-    if (iters.length) renderIterRows(iters);
-    else renderIterRows(ITERS);
-  }).catch(() => renderIterRows(ITERS));
+async function renderHarness() {
+  try {
+    const data = await apiFetch('/harness/status');
+    _applyHarnessState(data);
+    // If running, poll every 4 seconds
+    if (data.status === 'running' && !_harnessPoller) {
+      _harnessPoller = setInterval(async () => {
+        try {
+          const d = await apiFetch('/harness/status');
+          _applyHarnessState(d);
+          if (d.status !== 'running') { clearInterval(_harnessPoller); _harnessPoller = null; }
+        } catch (_) {}
+      }, 4000);
+    }
+  } catch (_) {
+    document.getElementById('harness-status-text').textContent =
+      'Could not reach backend — is the server running?';
+  }
 }
 
-function renderIterRows(iters) {
-  document.getElementById('harness-iters').innerHTML = iters.map(h =>
-    `<div class="iter-row">
-      <span class="iter-label">${h.iter}</span>
-      <div class="iter-bar"><div class="iter-fill" style="width:${Math.round(h.score * 100)}%"></div></div>
-      <span class="iter-score">${h.score.toFixed(2)}</span>
-      <span class="iter-note">${h.note} ${h.best ? '<span class="best-tag">best</span>' : ''}</span>
-    </div>`
-  ).join('');
+function _applyHarnessState(data) {
+  const statusPill = document.getElementById('harness-status-pill');
+  const statusText = document.getElementById('harness-status-text');
+  const runBtn     = document.getElementById('harness-run-btn');
+  const stopBtn    = document.getElementById('harness-stop-btn');
+
+  // Status pill colour
+  const pillStyle = {
+    idle:    'color:var(--muted);border-color:var(--border2)',
+    running: 'color:var(--green);border-color:rgba(45,212,160,.3);background:rgba(45,212,160,.06)',
+    done:    'color:var(--purple2);border-color:rgba(139,127,240,.3);background:rgba(139,127,240,.08)',
+    stopped: 'color:var(--amber);border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.06)',
+    error:   'color:var(--red);border-color:rgba(248,113,113,.3)',
+  }[data.status] || '';
+  statusPill.setAttribute('style',
+    `font-family:var(--mono);font-size:10px;padding:3px 10px;border-radius:8px;border:1px solid;${pillStyle}`);
+  statusPill.textContent = data.status;
+
+  if (data.status === 'running') {
+    const cur = data.current_iteration, max = data.max_iterations;
+    statusText.textContent = `Running iteration ${cur} of ${max}…`;
+    runBtn.disabled = true; runBtn.textContent = 'Running…';
+    stopBtn.style.display = ''; stopBtn.disabled = false; stopBtn.textContent = 'Stop';
+  } else if (data.status === 'done') {
+    const elapsed = data.finished_at && data.started_at
+      ? Math.round(data.finished_at - data.started_at) + 's' : '';
+    statusText.textContent = `Completed ${data.iterations.length} iteration${data.iterations.length!==1?'s':''} ${elapsed ? 'in ' + elapsed : ''}.`;
+    runBtn.disabled = false; runBtn.textContent = 'Run again';
+    stopBtn.style.display = 'none';
+  } else if (data.status === 'stopped') {
+    statusText.textContent = `Stopped after ${data.iterations.length} iteration${data.iterations.length!==1?'s':''}. Best prompt saved.`;
+    runBtn.disabled = false; runBtn.textContent = 'Resume';
+    stopBtn.style.display = 'none';
+  } else if (data.status === 'error') {
+    statusText.textContent = `Error: ${esc(data.error)}`;
+    runBtn.disabled = false; runBtn.textContent = 'Retry';
+    stopBtn.style.display = 'none';
+  } else {
+    statusText.textContent = 'Run the evolution loop to start improving the analyst prompt.';
+    runBtn.disabled = false; runBtn.textContent = 'Run evolution';
+    stopBtn.style.display = 'none';
+  }
+
+  // Iteration rows
+  const iters = data.iterations || [];
+  if (iters.length) {
+    document.getElementById('harness-iters').innerHTML = iters.map((h, i) => {
+      const pct = Math.round(h.score * 100);
+      const col = pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--purple2)' : 'var(--amber)';
+      return `<div class="iter-row">
+        <span class="iter-label">iter_${i}</span>
+        <div class="iter-bar"><div class="iter-fill" style="width:${pct}%;background:${col}"></div></div>
+        <span class="iter-score">${h.score.toFixed(2)}</span>
+        <span class="iter-note">${esc(h.summary || '')} ${h.is_best ? '<span class="best-tag">best</span>' : ''}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Improvement stat
+  if (iters.length >= 2) {
+    const first = iters[0].score, best = data.best_score;
+    const delta = first > 0 ? Math.round((best - first) / first * 100) : 0;
+    document.getElementById('harness-improvement').textContent =
+      (delta >= 0 ? '+' : '') + delta + '%';
+  } else if (iters.length === 1) {
+    document.getElementById('harness-improvement').textContent = 'iter_0 done';
+  }
+
+  // Best score card
+  if (data.best_score > 0) {
+    document.getElementById('harness-best-score').textContent = data.best_score.toFixed(2);
+    const bestIter = iters.findIndex(it => it.is_best);
+    document.getElementById('harness-best-label').textContent =
+      bestIter >= 0 ? `achieved at iter_${bestIter}` : 'best so far';
+  }
+
+  // Per-case breakdown for the last iteration
+  const last = iters[iters.length - 1];
+  if (last && last.case_scores) {
+    document.getElementById('harness-cases-section').style.display = '';
+    document.getElementById('harness-cases').innerHTML =
+      (last.case_scores || []).map(cs => {
+        const pct = Math.round(cs.score * 100);
+        const col = pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--amber)' : 'var(--red)';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text);flex:1">${esc(cs.input)}</span>
+          <div style="width:80px;height:3px;background:var(--bg4);border-radius:2px">
+            <div style="width:${pct}%;height:100%;background:${col};border-radius:2px"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:11px;color:${col};width:36px;text-align:right">${cs.score.toFixed(2)}</span>
+        </div>`;
+      }).join('');
+  }
+}
+
+async function startHarness() {
+  const btn = document.getElementById('harness-run-btn');
+  btn.disabled = true; btn.textContent = 'Starting…';
+  try {
+    await fetch(API + '/harness/run?max_iterations=5', { method: 'POST' });
+    renderHarness();
+  } catch (_) {
+    btn.disabled = false; btn.textContent = 'Run evolution';
+  }
+}
+
+async function stopHarness() {
+  const btn = document.getElementById('harness-stop-btn');
+  btn.disabled = true; btn.textContent = 'Stopping…';
+  try {
+    await fetch(API + '/harness/stop', { method: 'POST' });
+  } catch (_) {}
+  // Poll once more to refresh the status
+  setTimeout(renderHarness, 500);
 }
 
 // ── Chat ──────────────────────────────────────────────────────────────────────

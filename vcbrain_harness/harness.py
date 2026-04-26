@@ -15,10 +15,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-import anthropic
+from google import genai
 
 LAYER2_BASE = os.environ.get("LAYER2_BASE_URL", "http://localhost:8000")
-MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
 ANALYST_PROMPT = """\
 You are a senior VC analyst at a top-tier venture fund. You have been given structured data \
@@ -157,14 +157,13 @@ def solve(input_data: str) -> str:
         conflicts_block=conflicts_block,
     )
 
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    message = client.messages.create(
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    response = client.models.generate_content(
         model=MODEL,
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
+        contents=prompt,
     )
 
-    raw = message.content[0].text.strip()
+    raw = response.text.strip()
 
     # Strip accidental markdown fences
     if raw.startswith("```"):

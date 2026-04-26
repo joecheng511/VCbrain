@@ -11,3 +11,4 @@ venv/
 .ruff_cache/
 .ph_workspace/
 .claude/
+vcbrain_tasks/evolution_state.json
