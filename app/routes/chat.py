@@ -304,6 +304,20 @@ Format: <strong> for company names and key numbers, <br><br> between sections. M
     return {"intent": "comparison", "entity": ent_a["name"], "entity2": ent_b["name"], "text": text}
 
 
+def _sector_bar_row(r: dict, total_cos: int) -> str:
+    pct     = f'{r["company_count"] / total_cos * 100:.0f}%' if total_cos else '0%'
+    bar     = '▓' * max(1, round(r['company_count'] / total_cos * 20))
+    arr_str = f' · \u20ac{r["total_arr_m"]:.1f}M ARR' if r['total_arr_m'] > 0 else ''
+    flag    = f'  \u26a0 {r["open_conflicts"]}' if r['open_conflicts'] > 0 else ''
+    return (
+        f'<div style="margin:4px 0;font-size:12px">'
+        f'<span style="display:inline-block;width:120px;font-family:var(--mono)">{r["sector"]}</span> '
+        f'<span style="color:var(--purple2)">{bar}</span> '
+        f'<span style="color:var(--muted)">{r["company_count"]} cos · {pct}{arr_str}{flag}</span>'
+        f'</div>'
+    )
+
+
 def _handle_sector(sector_filter: str | None) -> dict:
     """SQL-aggregated sector breakdown — no Gemini needed."""
     with get_dict_cursor() as cur:
@@ -361,14 +375,7 @@ def _handle_sector(sector_filter: str | None) -> dict:
             text = f'No companies tagged as <strong>{sector_filter}</strong>. Sectors present: {top5}'
     else:
         bar_rows = "".join(
-            f'<div style="margin:4px 0;font-size:12px">'
-            f'<span style="display:inline-block;width:120px;font-family:var(--mono)">{r["sector"]}</span> '
-            f'<span style="color:var(--purple2)">{"▓"*max(1,round(r["company_count"]/total_cos*20))}</span> '
-            f'<span style="color:var(--muted)">{r["company_count"]} cos · '
-            f'{r["company_count"]/total_cos*100:.0f}%'
-            f'{f" · €{r[\"total_arr_m\"]:.1f}M ARR" if r["total_arr_m"] > 0 else ""}'
-            f'{"  ⚠ " + str(r["open_conflicts"]) if r["open_conflicts"] > 0 else ""}'
-            f'</span></div>'
+            _sector_bar_row(r, total_cos)
             for r in rows[:12]
         )
         text = (f'Portfolio: <strong>{total_cos} companies</strong> · '
